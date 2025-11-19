@@ -3,5 +3,7 @@ mod game;
 use game::*;
 
 fn main() {
-    println!("Hello, world!");
+    let game = Game::new(
+        GameDifficulty::EASY
+    );
 }
