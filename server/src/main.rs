@@ -6,4 +6,5 @@ fn main() {
     let game = Game::new(
         GameDifficulty::EASY
     );
+    println!("{:#?}", game);
 }

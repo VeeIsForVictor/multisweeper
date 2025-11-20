@@ -1,4 +1,4 @@
-use rand::random_bool;
+use rand::{random_bool, random_range};
 
 #[derive(Debug)]
 pub struct Board {
@@ -40,16 +40,15 @@ impl Board {
 
     pub fn new(width: u8, height: u8, number_of_mines: u8) -> Self {
         let mut cells = vec![];
-        let mut created_mines = 0;
-        for _i in 0..height {
+        let mut created_mines: Vec<(u8, u8)> = vec![];
+        for i in 0..number_of_mines {
+            created_mines.push((random_range(0..width), random_range(0..height)));
+        }
+
+        for y in 0..height {
             let mut row = vec![];
-            for _j in 0..width {
-                let is_mine = if created_mines < number_of_mines { 
-                    created_mines += 1;
-                    random_bool(0.5)
-                } else {
-                    false
-                };
+            for x in 0..width {
+                let is_mine = created_mines.contains(&(x, y));
                 row.push(Cell::new(is_mine));
             }
             cells.push(row);
