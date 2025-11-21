@@ -12,26 +12,22 @@ impl Board {
     fn evaluate_cells(&mut self) {
         let width = self.width;
         let height = self.height;
-        let evaluate_neighbors = |cells: &Vec<Vec<Cell>>, row: isize, col: isize| {
+        let mut evaluate_neighbors = |row: u8, col: u8| {
             for dy in [-1, 0, 1] {
                 for dx in [-1, 0, 1] {
-                    let target_col = dy + col;
-                    let target_row = dx + row;
+                    let target_col: isize = dy + col as isize;
+                    let target_row: isize = dx + row as isize;
                     if (dx, dy) != (0, 0) 
-                        && (self.height.into() > target_col && target_col > 0) 
-                        && (self.width.into() > target_row && target_row > 0) {
-                            cells[target_col as usize][target_row as usize].adjacent_mines += 1;
+                        && (self.height > target_col as u8 && target_col > 0) 
+                        && (self.width > target_row as u8 && target_row > 0) {
+                            self.cells[target_col as usize][target_row as usize].adjacent_mines += 1;
                     }
                 }
             }
         };
 
-        for row_idx in 0..self.height {
-            for col_idx in 0..self.width {
-                let adjacent = evaluate_neighbors(&self.cells, row_idx as isize, col_idx as isize);
-                let cell = &mut self.cells[row_idx as usize][col_idx as usize];
-                cell.adjacent_mines = adjacent;
-            }
+        for (row_idx, col_idx) in &self.created_mines {
+            evaluate_neighbors(*row_idx, *col_idx);
         }
     }
 
