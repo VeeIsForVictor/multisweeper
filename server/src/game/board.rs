@@ -31,8 +31,8 @@ impl Board {
                     let target_col: isize = dy + col as isize;
                     let target_row: isize = dx + row as isize;
                     if (dx, dy) != (0, 0) 
-                        && (self.height > target_col as u8 && target_col > 0) 
-                        && (self.width > target_row as u8 && target_row > 0) {
+                        && (self.height > target_col as u8 && target_col >= 0) 
+                        && (self.width > target_row as u8 && target_row >= 0) {
                             self.cells[target_col as usize][target_row as usize].adjacent_mines += 1;
                     }
                 }
