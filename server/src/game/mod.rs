@@ -19,7 +19,7 @@ pub struct Game {
 
 impl Display for Game {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let _ = write!(f, "{0:?}", self.difficulty);
+        let _ = write!(f, "{0:?}\n", self.difficulty);
         return write!(f, "{0}", self.board);
     }
 }
