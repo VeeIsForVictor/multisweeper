@@ -14,9 +14,10 @@ impl Display for Board {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let _ = f.write_fmt(format_args!("{} x {}", self.width, self.height));
         for row in &self.cells {
-            while let Some(cell) = row.iter().next() {
-                let _ = write!(f, "{cell}");
+            for col in row {
+                let _ = write!(f, "{col}");
             }
+            let _ = write!(f, "\n");
         }
         Ok(())
     }
