@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, io::Error};
 
 use rand::{random_bool, random_range};
 
@@ -24,16 +24,20 @@ impl Display for Board {
 }
 
 impl Board {
+    fn get_cell(&self, row: u8, col: u8) -> Result<Cell, Error> {
+        if (0 > row || row > self.height)
+    }
+
     fn evaluate_cells(&mut self) {
-        let mut evaluate_neighbors = |row: u8, col: u8| {
+        let mut evaluate_neighbors = |x: u8, y: u8| {
             for dy in [-1, 0, 1] {
                 for dx in [-1, 0, 1] {
-                    let target_col: isize = dy + col as isize;
-                    let target_row: isize = dx + row as isize;
+                    let target_y: isize = dy + y as isize;
+                    let target_x: isize = dx + x as isize;
                     if (dx, dy) != (0, 0) 
-                        && (self.height > target_col as u8 && target_col >= 0) 
-                        && (self.width > target_row as u8 && target_row >= 0) {
-                            self.cells[target_col as usize][target_row as usize].adjacent_mines += 1;
+                        && (self.height > target_y as u8 && target_y >= 0) 
+                        && (self.width > target_x as u8 && target_x >= 0) {
+                            self.cells[target_y as usize][target_x as usize].adjacent_mines += 1;
                     }
                 }
             }
