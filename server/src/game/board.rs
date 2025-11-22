@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use rand::{random_bool, random_range};
 
 #[derive(Debug)]
@@ -8,10 +10,20 @@ pub struct Board {
     cells: Vec<Vec<Cell>>
 }
 
+impl Display for Board {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let _ = f.write_fmt(format_args!("{} x {}", self.width, self.height));
+        for row in &self.cells {
+            while let Some(cell) = row.iter().next() {
+                let _ = write!(f, "{cell}");
+            }
+        }
+        Ok(())
+    }
+}
+
 impl Board {
     fn evaluate_cells(&mut self) {
-        let width = self.width;
-        let height = self.height;
         let mut evaluate_neighbors = |row: u8, col: u8| {
             for dy in [-1, 0, 1] {
                 for dx in [-1, 0, 1] {
@@ -66,6 +78,20 @@ struct Cell {
     pub adjacent_mines: u8,
     is_revealed: bool,
     is_flagged: bool,
+}
+
+impl Display for Cell {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.is_flagged {
+            f.write_str("F")
+        } else if self.is_mine {
+            f.write_str("*")
+        } else if self.adjacent_mines > 0 {
+            f.write_fmt(format_args!("{}", self.adjacent_mines))
+        } else {
+            f.write_str(".")
+        }
+    }
 }
 
 impl Cell {
