@@ -1,6 +1,6 @@
-use std::{fmt::Display, io::Error};
+use std::fmt::Display;
 
-use rand::{random_bool, random_range};
+use rand::random_range;
 
 #[derive(Debug, Clone)]
 struct BoardError;
@@ -67,7 +67,7 @@ impl Board {
     pub fn new(width: u8, height: u8, number_of_mines: u8) -> Self {
         let mut cells = vec![];
         let mut created_mines: Vec<(u8, u8)> = vec![];
-        for i in 0..number_of_mines {
+        for _i in 0..number_of_mines {
             created_mines.push((random_range(0..width), random_range(0..height)));
         }
 
