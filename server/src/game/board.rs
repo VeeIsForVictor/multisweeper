@@ -13,8 +13,8 @@ impl Display for BoardError {
 
 #[derive(Debug)]
 pub struct Board {
-    width: u8,
-    height: u8,
+    pub width: u8,
+    pub height: u8,
     created_mines: Vec<(u8, u8)>,
     cells: Vec<Vec<Cell>>
 }
@@ -90,6 +90,10 @@ impl Board {
         board.evaluate_cells();
 
         return board;
+    }
+
+    pub fn is_coordinate_valid(&self, x: u8, y: u8) -> bool {
+        return (0..self.width).contains(&x) && (0..self.height).contains(&y)
     }
 }
 

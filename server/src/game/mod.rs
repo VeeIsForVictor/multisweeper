@@ -35,6 +35,10 @@ impl Game {
             difficulty
         }
     }
+
+    fn is_coordinate_valid(&self, x: u8, y: u8) -> bool {
+        self.board.is_coordinate_valid(x, y)
+    }
 }
 
 enum GamePhase {
