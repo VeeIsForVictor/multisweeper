@@ -2,6 +2,15 @@ use std::{fmt::Display, io::Error};
 
 use rand::{random_bool, random_range};
 
+#[derive(Debug, Clone)]
+struct BoardError;
+
+impl Display for BoardError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("bad operation on board")
+    }
+}
+
 #[derive(Debug)]
 pub struct Board {
     width: u8,
@@ -24,27 +33,34 @@ impl Display for Board {
 }
 
 impl Board {
-    fn get_cell(&self, row: u8, col: u8) -> Result<Cell, Error> {
-        if (0 > row || row > self.height)
+    fn get_cell_mut(&mut self, x: u8, y: u8) -> Result<&mut Cell, BoardError> {
+        if x > self.width || y > self.height {
+            return Err(BoardError)
+        } else {
+            return Ok(&mut self.cells[y as usize][x as usize])
+        }
+    }
+
+    fn evaluate_neighbors(&mut self, x: u8, y: u8) {
+        for dy in [-1, 0, 1] {
+            for dx in [-1, 0, 1] {
+                let target_y: isize = dy + y as isize;
+                let target_x: isize = dx + x as isize;
+                if (dx, dy) != (0, 0) 
+                    && (self.height > target_y as u8 && target_y >= 0) 
+                    && (self.width > target_x as u8 && target_x >= 0) {
+                        self.get_cell_mut(target_x as u8, target_y as u8).unwrap().adjacent_mines += 1;
+                }
+            }
+        }
     }
 
     fn evaluate_cells(&mut self) {
-        let mut evaluate_neighbors = |x: u8, y: u8| {
-            for dy in [-1, 0, 1] {
-                for dx in [-1, 0, 1] {
-                    let target_y: isize = dy + y as isize;
-                    let target_x: isize = dx + x as isize;
-                    if (dx, dy) != (0, 0) 
-                        && (self.height > target_y as u8 && target_y >= 0) 
-                        && (self.width > target_x as u8 && target_x >= 0) {
-                            self.cells[target_y as usize][target_x as usize].adjacent_mines += 1;
-                    }
-                }
-            }
-        };
+        // clone the vector so we don't keep an immutable borrow on self
+        let created_mines = self.created_mines.clone();
 
-        for (row_idx, col_idx) in &self.created_mines {
-            evaluate_neighbors(*row_idx, *col_idx);
+        for (row_idx, col_idx) in created_mines {
+            self.evaluate_neighbors(row_idx, col_idx);
         }
     }
 
