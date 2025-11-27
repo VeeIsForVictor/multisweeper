@@ -14,7 +14,8 @@ pub enum GameDifficulty {
 #[derive(Debug)]
 pub struct Game {
     board: Board,
-    difficulty: GameDifficulty
+    difficulty: GameDifficulty,
+    state: GameState
 } 
 
 impl Display for Game {
@@ -32,7 +33,8 @@ impl Game {
                 (difficulty as u8) * 4,
                 (difficulty as u8) * 3
             ),
-            difficulty
+            difficulty,
+            state: GameState { phase: GamePhase::PLAYING }
         }
     }
 
@@ -41,12 +43,14 @@ impl Game {
     }
 }
 
+#[derive(Debug)]
 enum GamePhase {
     WON,
     LOST,
     PLAYING
 }
 
+#[derive(Debug)]
 pub struct GameState {
     phase: GamePhase,
 }
