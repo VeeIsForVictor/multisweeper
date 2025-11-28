@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{cell, fmt::Display};
 
 use rand::random_range;
 
@@ -9,6 +9,12 @@ impl Display for BoardError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("bad operation on board")
     }
+}
+
+#[derive(Debug)]
+pub enum RevealResult {
+    Mine,
+    Empty
 }
 
 #[derive(Debug)]
@@ -94,6 +100,56 @@ impl Board {
 
     pub fn is_coordinate_valid(&self, x: u8, y: u8) -> bool {
         return (0..self.width).contains(&x) && (0..self.height).contains(&y)
+    }
+
+    pub fn reveal(&mut self, x: u8, y: u8) -> Result<RevealResult, BoardError> {
+        let get_cell_result = self.get_cell_mut(x, y);
+        let mut cell: &mut Cell;
+
+        match get_cell_result {
+            Err(e) => {
+                return Err(e);
+            }
+            Ok(cell_ref) => {
+                cell = cell_ref;
+            }
+        }
+
+        if cell.is_mine {
+            return Ok(RevealResult::Mine);
+        } 
+
+        let mut to_reveal = vec![(x, y)];
+        self.reveal_cells_cascade(&mut to_reveal);
+        return Ok(RevealResult::Empty);
+    }
+
+    fn reveal_cells_cascade(&mut self, to_reveal: &mut Vec<(u8, u8)>) -> Result<(), BoardError> {
+        match to_reveal.pop() {
+            None => return Ok(()),
+            Some((x, y)) => {
+                let get_cell_result = self.get_cell_mut(x, y);
+                match get_cell_result {
+                    Err(e) => Err(e),
+                    Ok(cell) => {
+                        if (cell.is_revealed || cell.adjacent_mines > 0) {
+                            return Ok(());
+                        }
+                        cell.is_revealed = true;
+                        for dx in -1..1 {
+                            let target_x: i8 = dx + x as i8;
+                            for dy in -1..1 {
+                                let target_y: i8 = dy + y as i8;
+                                if target_x >= 0 && target_y >= 0 {
+                                    to_reveal.push((target_x as u8, target_y as u8));
+                                }
+                            }
+                        }
+                        Ok(())
+                    }
+                }
+            }
+        }
     }
 }
 
