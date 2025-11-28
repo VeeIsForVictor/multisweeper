@@ -1,8 +1,12 @@
 mod board;
+mod error;
 
 use std::fmt::Display;
 
 use board::Board;
+use error::GameError;
+
+use crate::game::board::RevealResult;
 
 #[derive(Debug, Clone, Copy)]
 pub enum GameDifficulty {
@@ -40,6 +44,22 @@ impl Game {
 
     fn is_coordinate_valid(&self, x: u8, y: u8) -> bool {
         self.board.is_coordinate_valid(x, y)
+    }
+
+    fn reveal(&mut self, x: u8, y: u8) -> Result<GamePhase, GameError> {
+        if !self.is_coordinate_valid(x, y) {
+            return Err(GameError);
+        }
+        
+        let reveal_result = self.board.reveal(x, y);
+        let Ok(revealed_state) = reveal_result else {
+            return Err(GameError);
+        };
+        
+        match revealed_state {
+            RevealResult::Empty => Ok(GamePhase::PLAYING),
+            RevealResult::Mine => Ok(GamePhase::LOST)
+        }
     }
 }
 
