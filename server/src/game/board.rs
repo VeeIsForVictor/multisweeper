@@ -3,7 +3,7 @@ use std::{cell, fmt::Display};
 use rand::random_range;
 
 #[derive(Debug, Clone)]
-struct BoardError;
+pub struct BoardError;
 
 impl Display for BoardError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
