@@ -120,7 +120,10 @@ impl Board {
         } 
 
         let mut to_reveal = vec![(x, y)];
-        self.reveal_cells_cascade(&mut to_reveal);
+        let cascade_result = self.reveal_cells_cascade(&mut to_reveal);
+        if let Err(e) = cascade_result {
+            return Err(e);
+        }
         return Ok(RevealResult::Empty);
     }
 
