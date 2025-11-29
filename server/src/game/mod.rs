@@ -46,7 +46,7 @@ impl Game {
         self.board.is_coordinate_valid(x, y)
     }
 
-    fn reveal(&mut self, x: u8, y: u8) -> Result<GamePhase, GameError> {
+    pub fn reveal(&mut self, x: u8, y: u8) -> Result<GamePhase, GameError> {
         if !self.is_coordinate_valid(x, y) {
             return Err(GameError);
         }
@@ -64,7 +64,7 @@ impl Game {
 }
 
 #[derive(Debug)]
-enum GamePhase {
+pub enum GamePhase {
     WON,
     LOST,
     PLAYING

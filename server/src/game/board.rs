@@ -40,7 +40,7 @@ impl Display for Board {
 
 impl Board {
     fn get_cell_mut(&mut self, x: u8, y: u8) -> Result<&mut Cell, BoardError> {
-        if x > self.width || y > self.height {
+        if x >= self.width || y >= self.height {
             return Err(BoardError)
         } else {
             return Ok(&mut self.cells[y as usize][x as usize])
@@ -128,6 +128,7 @@ impl Board {
     }
 
     fn reveal_cells_cascade(&mut self, to_reveal: &mut Vec<(u8, u8)>) -> Result<(), BoardError> {
+        println!("{:?} = ({:?})", to_reveal.iter().peekable().peek(), to_reveal);
         match to_reveal.pop() {
             None => return Ok(()),
             Some((x, y)) => {
@@ -136,19 +137,20 @@ impl Board {
                     Err(e) => Err(e),
                     Ok(cell) => {
                         if (cell.is_revealed || cell.adjacent_mines > 0) {
-                            return Ok(());
+                            cell.is_revealed = true;
+                            return self.reveal_cells_cascade(to_reveal);
                         }
                         cell.is_revealed = true;
-                        for dx in -1..1 {
+                        for dx in [-1, 0, 1] {
                             let target_x: i8 = dx + x as i8;
-                            for dy in -1..1 {
+                            for dy in [-1, 0, 1] {
                                 let target_y: i8 = dy + y as i8;
-                                if target_x >= 0 && target_y >= 0 {
-                                    to_reveal.push((target_x as u8, target_y as u8));
+                                if target_x >= 0 && target_y >= 0 && (dx, dy) != (0, 0) {
+                                    to_reveal.insert(0, (target_x as u8, target_y as u8));
                                 }
                             }
                         }
-                        Ok(())
+                        self.reveal_cells_cascade(to_reveal)
                     }
                 }
             }
@@ -168,6 +170,8 @@ impl Display for Cell {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.is_flagged {
             f.write_str("F")
+        } else if !self.is_revealed {
+            f.write_str("#")
         } else if self.is_mine {
             f.write_str("*")
         } else if self.adjacent_mines > 0 {
