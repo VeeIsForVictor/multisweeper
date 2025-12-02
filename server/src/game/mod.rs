@@ -63,8 +63,8 @@ impl Game {
         };
         
         match revealed_state {
-            RevealResult::Empty => Ok(GamePhase::PLAYING),
-            RevealResult::Mine => Ok(GamePhase::LOST)
+            RevealResult::Mine => Ok(GamePhase::LOST),
+            _ => Ok(GamePhase::PLAYING),
         }
     }
 
