@@ -14,7 +14,8 @@ impl Display for BoardError {
 #[derive(Debug)]
 pub enum RevealResult {
     Mine,
-    Empty
+    Empty,
+    Number(u8)
 }
 
 #[derive(Debug)]
@@ -155,6 +156,10 @@ impl Board {
                 }
             }
         }
+    }
+
+    fn flag(&mut self, x: u8, y: u8) {
+        
     }
 }
 
