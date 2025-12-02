@@ -7,6 +7,6 @@ fn main() {
         GameDifficulty::EASY
     );
     println!("{}", game);
-    game.reveal(0, 0).unwrap();
+    game.handle_action(GameAction::REVEAL { x: 0, y: 0 }).unwrap();
     println!("{}", game);
 }
