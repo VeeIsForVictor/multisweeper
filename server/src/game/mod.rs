@@ -1,14 +1,18 @@
 mod board;
 mod error;
-mod action;
 
 use std::fmt::Display;
 
 use board::Board;
 use error::GameError;
-use action::GameAction;
 
 use crate::game::board::RevealResult;
+
+#[derive(Debug)]
+pub enum GameAction {
+    REVEAL { x: u8, y: u8 },
+    FLAG {x: u8, y: u8}
+}
 
 #[derive(Debug, Clone, Copy)]
 pub enum GameDifficulty {
@@ -65,7 +69,7 @@ impl Game {
     }
 
     fn flag(&mut self, x: u8, y: u8) -> Result<GamePhase, GameError> {
-        
+
     }
 
     pub fn handle_action(&mut self, action: GameAction) -> Result<GamePhase, GameError> {
