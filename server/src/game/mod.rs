@@ -1,10 +1,12 @@
 mod board;
 mod error;
+mod action;
 
 use std::fmt::Display;
 
 use board::Board;
 use error::GameError;
+use action::GameAction;
 
 use crate::game::board::RevealResult;
 
@@ -46,7 +48,7 @@ impl Game {
         self.board.is_coordinate_valid(x, y)
     }
 
-    pub fn reveal(&mut self, x: u8, y: u8) -> Result<GamePhase, GameError> {
+    fn reveal(&mut self, x: u8, y: u8) -> Result<GamePhase, GameError> {
         if !self.is_coordinate_valid(x, y) {
             return Err(GameError);
         }
@@ -59,6 +61,17 @@ impl Game {
         match revealed_state {
             RevealResult::Empty => Ok(GamePhase::PLAYING),
             RevealResult::Mine => Ok(GamePhase::LOST)
+        }
+    }
+
+    fn flag(&mut self, x: u8, y: u8) -> Result<GamePhase, GameError> {
+        
+    }
+
+    pub fn handle_action(&mut self, action: GameAction) -> Result<GamePhase, GameError> {
+        match action {
+            GameAction::REVEAL {x, y} => self.reveal(x, y),
+            GameAction::FLAG { x, y } => self.flag(x, y)
         }
     }
 }
