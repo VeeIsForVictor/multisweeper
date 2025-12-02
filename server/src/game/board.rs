@@ -118,7 +118,11 @@ impl Board {
 
         if cell.is_mine {
             return Ok(RevealResult::Mine);
-        } 
+        }
+
+        if cell.adjacent_mines > 0 {
+            return Ok(RevealResult::Number(cell.adjacent_mines));
+        }
 
         let mut to_reveal = vec![(x, y)];
         let cascade_result = self.reveal_cells_cascade(&mut to_reveal);
