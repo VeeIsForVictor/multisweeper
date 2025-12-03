@@ -9,6 +9,19 @@ enum Command {
     Quit
 }
 
+#[derive(Debug)]
+struct CommandError; 
+
+impl Command {
+    fn to_game_action(&self) -> Result<GameAction, CommandError> {
+        match self {
+            Self::Reveal { x, y } => Ok(GameAction::REVEAL { x: x - 1, y: y - 1 }),
+            Self::Flag { x, y } => Ok(GameAction::FLAG { x: x - 1, y: y - 1 }),
+            _  => Err(CommandError)
+        }
+    }
+}
+
 fn main() {
     let mut game = Game::new(GameDifficulty::EASY);
 
@@ -20,6 +33,31 @@ fn main() {
         let command = read_command();
 
         println!("{:?}", command);
+
+        if let Command::Quit = command {
+            return;
+        }
+
+        let result = game.handle_action(command.to_game_action().unwrap());
+
+        let Ok(phase) = result else {
+            continue
+        };
+
+        match phase {
+            GamePhase::WON => {
+                println!("you won!");
+                break;
+            },
+            GamePhase::LOST => {
+                println!("you lost!");
+                break;
+            },
+            GamePhase::PLAYING => (),
+            GamePhase::STALLED => {
+                println!("invalid move");
+            }
+        }
     }
 }
 
@@ -34,7 +72,6 @@ fn read_command() -> Command {
         };
 
         let args: Vec<&str> = input.split(" ").map(|str| str.trim()).collect();
-        println!("{:?}", args);
         return match char {
             "r" => {
                 if args.len() != 3 {
