@@ -148,11 +148,6 @@ impl Board {
     }
 
     fn reveal_cells_cascade(&mut self, to_reveal: &mut Vec<(u8, u8)>) -> Result<(), BoardError> {
-        println!(
-            "{:?} = ({:?})",
-            to_reveal.iter().peekable().peek(),
-            to_reveal
-        );
         match to_reveal.pop() {
             None => return Ok(()),
             Some((x, y)) => {
