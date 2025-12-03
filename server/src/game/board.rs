@@ -115,7 +115,7 @@ impl Board {
 
     pub fn reveal(&mut self, x: u8, y: u8) -> Result<RevealResult, BoardError> {
         let get_cell_result = self.get_cell_mut(x, y);
-        let mut cell: &mut Cell;
+        let cell: &mut Cell;
 
         match get_cell_result {
             Err(e) => {
@@ -159,7 +159,7 @@ impl Board {
                 match get_cell_result {
                     Err(e) => Err(e),
                     Ok(cell) => {
-                        if (cell.is_revealed || cell.adjacent_mines > 0) {
+                        if cell.is_revealed || cell.adjacent_mines > 0 {
                             cell.is_revealed = true;
                             return self.reveal_cells_cascade(to_reveal);
                         }
