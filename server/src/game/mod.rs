@@ -69,7 +69,10 @@ impl Game {
     }
 
     fn flag(&mut self, x: u8, y: u8) -> Result<GamePhase, GameError> {
-
+        match self.board.flag(x, y) {
+            Ok(()) => Ok(GamePhase::PLAYING),
+            Err(e) => Err(GameError)
+        }
     }
 
     pub fn handle_action(&mut self, action: GameAction) -> Result<GamePhase, GameError> {
