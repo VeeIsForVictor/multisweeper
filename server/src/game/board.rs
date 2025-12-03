@@ -131,6 +131,7 @@ impl Board {
         }
 
         if cell.adjacent_mines > 0 {
+            cell.is_revealed = true;
             return Ok(RevealResult::Number(cell.adjacent_mines));
         }
 
