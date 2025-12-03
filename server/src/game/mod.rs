@@ -66,6 +66,7 @@ impl Game {
 
         match revealed_state {
             RevealResult::Mine => Ok(GamePhase::LOST),
+            RevealResult::DoNothing => Ok(GamePhase::STALLED),
             _ => Ok(GamePhase::PLAYING),
         }
     }
@@ -90,6 +91,7 @@ pub enum GamePhase {
     WON,
     LOST,
     PLAYING,
+    STALLED,
 }
 
 #[derive(Debug)]
