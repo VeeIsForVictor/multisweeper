@@ -15,7 +15,7 @@ impl Display for BoardError {
 pub enum RevealResult {
     Mine,
     Empty,
-    Number(u8)
+    Number(u8),
 }
 
 #[derive(Debug)]
@@ -23,7 +23,7 @@ pub struct Board {
     pub width: u8,
     pub height: u8,
     created_mines: Vec<(u8, u8)>,
-    cells: Vec<Vec<Cell>>
+    cells: Vec<Vec<Cell>>,
 }
 
 impl Display for Board {
@@ -42,9 +42,9 @@ impl Display for Board {
 impl Board {
     fn get_cell_mut(&mut self, x: u8, y: u8) -> Result<&mut Cell, BoardError> {
         if x >= self.width || y >= self.height {
-            return Err(BoardError)
+            return Err(BoardError);
         } else {
-            return Ok(&mut self.cells[y as usize][x as usize])
+            return Ok(&mut self.cells[y as usize][x as usize]);
         }
     }
 
@@ -53,10 +53,13 @@ impl Board {
             for dx in [-1, 0, 1] {
                 let target_y: isize = dy + y as isize;
                 let target_x: isize = dx + x as isize;
-                if (dx, dy) != (0, 0) 
-                    && (self.height > target_y as u8 && target_y >= 0) 
-                    && (self.width > target_x as u8 && target_x >= 0) {
-                        self.get_cell_mut(target_x as u8, target_y as u8).unwrap().adjacent_mines += 1;
+                if (dx, dy) != (0, 0)
+                    && (self.height > target_y as u8 && target_y >= 0)
+                    && (self.width > target_x as u8 && target_x >= 0)
+                {
+                    self.get_cell_mut(target_x as u8, target_y as u8)
+                        .unwrap()
+                        .adjacent_mines += 1;
                 }
             }
         }
@@ -86,21 +89,21 @@ impl Board {
             }
             cells.push(row);
         }
-        
-        let mut board= Board {
+
+        let mut board = Board {
             width,
             height,
             created_mines,
-            cells
+            cells,
         };
-        
+
         board.evaluate_cells();
 
         return board;
     }
 
     pub fn is_coordinate_valid(&self, x: u8, y: u8) -> bool {
-        return (0..self.width).contains(&x) && (0..self.height).contains(&y)
+        return (0..self.width).contains(&x) && (0..self.height).contains(&y);
     }
 
     pub fn reveal(&mut self, x: u8, y: u8) -> Result<RevealResult, BoardError> {
@@ -133,7 +136,11 @@ impl Board {
     }
 
     fn reveal_cells_cascade(&mut self, to_reveal: &mut Vec<(u8, u8)>) -> Result<(), BoardError> {
-        println!("{:?} = ({:?})", to_reveal.iter().peekable().peek(), to_reveal);
+        println!(
+            "{:?} = ({:?})",
+            to_reveal.iter().peekable().peek(),
+            to_reveal
+        );
         match to_reveal.pop() {
             None => return Ok(()),
             Some((x, y)) => {
@@ -165,7 +172,7 @@ impl Board {
     pub fn flag(&mut self, x: u8, y: u8) -> Result<(), BoardError> {
         match self.get_cell_mut(x, y) {
             Ok(cell) => Ok(cell.is_flagged = !cell.is_flagged),
-            Err(e) => Err(e)
+            Err(e) => Err(e),
         }
     }
 }
@@ -200,7 +207,7 @@ impl Cell {
             is_mine,
             is_revealed: false,
             is_flagged: false,
-            adjacent_mines: 0
+            adjacent_mines: 0,
         }
     }
 }
