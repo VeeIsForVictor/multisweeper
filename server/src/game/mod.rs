@@ -80,7 +80,13 @@ impl Game {
 
     pub fn handle_action(&mut self, action: GameAction) -> Result<GamePhase, GameError> {
         match action {
-            GameAction::REVEAL { x, y } => self.reveal(x, y),
+            GameAction::REVEAL { x, y } => {
+                let reveal = self.reveal(x, y);
+                if let Ok(GamePhase::PLAYING) = reveal && self.board.is_all_safe_cells_revealed() {
+                    return Ok(GamePhase::WON);
+                }
+                return reveal;
+            },
             GameAction::FLAG { x, y } => self.flag(x, y),
         }
     }
