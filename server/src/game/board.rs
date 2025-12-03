@@ -162,8 +162,11 @@ impl Board {
         }
     }
 
-    fn flag(&mut self, x: u8, y: u8) {
-        
+    pub fn flag(&mut self, x: u8, y: u8) -> Result<(), BoardError> {
+        match self.get_cell_mut(x, y) {
+            Ok(cell) => Ok(cell.is_flagged = !cell.is_flagged),
+            Err(e) => Err(e)
+        }
     }
 }
 
