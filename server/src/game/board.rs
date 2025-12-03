@@ -16,6 +16,7 @@ pub enum RevealResult {
     Mine,
     Empty,
     Number(u8),
+    DoNothing
 }
 
 #[derive(Debug)]
@@ -131,6 +132,10 @@ impl Board {
 
         if cell.adjacent_mines > 0 {
             return Ok(RevealResult::Number(cell.adjacent_mines));
+        }
+
+        if cell.is_flagged || cell.is_revealed {
+            return Ok(RevealResult::DoNothing);
         }
 
         let mut to_reveal = vec![(x, y)];
