@@ -48,6 +48,12 @@ impl Board {
         }
     }
 
+    pub fn is_all_safe_cells_revealed(&self) -> bool {
+        return self.cells.iter().all(
+            |row| row.iter().all(|cell| cell.is_safe())
+        )
+    }
+
     fn evaluate_neighbors(&mut self, x: u8, y: u8) {
         for dy in [-1, 0, 1] {
             for dx in [-1, 0, 1] {
@@ -209,5 +215,9 @@ impl Cell {
             is_flagged: false,
             adjacent_mines: 0,
         }
+    }
+
+    fn is_safe(&self) -> bool {
+        return self.is_mine ^ !self.is_revealed;
     }
 }
