@@ -90,6 +90,10 @@ impl Game {
             GameAction::FLAG { x, y } => self.flag(x, y),
         }
     }
+
+    pub fn lose_game(&mut self) {
+        self.board.reveal_all();
+    }
 }
 
 #[derive(Debug)]
