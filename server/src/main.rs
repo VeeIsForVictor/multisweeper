@@ -46,11 +46,11 @@ fn main() {
 
         match phase {
             GamePhase::WON => {
-                println!("you won!");
+                println!("you won!\n{}", game);
                 break;
             },
             GamePhase::LOST => {
-                println!("you lost!");
+                println!("you lost!\n{}", game);
                 break;
             },
             GamePhase::PLAYING => (),
