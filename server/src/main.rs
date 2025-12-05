@@ -50,6 +50,7 @@ fn main() {
                 break;
             },
             GamePhase::LOST => {
+                game.lose_game();
                 println!("you lost!\n{}", game);
                 break;
             },
