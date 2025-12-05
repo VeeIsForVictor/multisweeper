@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
 use rand::random_range;
+use tracing::{Level, span};
 
 #[derive(Debug, Clone)]
 pub struct BoardError;
@@ -73,6 +74,7 @@ impl Board {
         }
     }
 
+    #[tracing::instrument(skip_all)]
     fn evaluate_cells(&mut self) {
         // clone the vector so we don't keep an immutable borrow on self
         let created_mines = self.created_mines.clone();
@@ -82,6 +84,7 @@ impl Board {
         }
     }
 
+    #[tracing::instrument]
     pub fn new(width: u8, height: u8, number_of_mines: u8) -> Self {
         let mut cells = vec![];
         let mut created_mines: Vec<(u8, u8)> = vec![];
@@ -121,6 +124,7 @@ impl Board {
         return (0..self.width).contains(&x) && (0..self.height).contains(&y);
     }
 
+    #[tracing::instrument(skip_all)]
     pub fn reveal(&mut self, x: u8, y: u8) -> Result<RevealResult, BoardError> {
         let get_cell_result = self.get_cell_mut(x, y);
         let cell: &mut Cell;

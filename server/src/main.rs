@@ -22,7 +22,10 @@ impl Command {
     }
 }
 
+#[tracing::instrument]
 fn main() {
+    tracing_forest::init();
+
     let mut game = Game::new(GameDifficulty::TEST);
 
     println!("Welcome to Multisweeper [test]!");

@@ -5,6 +5,7 @@ use std::fmt::Display;
 
 use board::Board;
 use error::GameError;
+use tracing::trace;
 
 use crate::game::board::RevealResult;
 
@@ -37,6 +38,7 @@ impl Display for Game {
 }
 
 impl Game {
+    #[tracing::instrument]
     pub fn new(difficulty: GameDifficulty) -> Self {
         Game {
             board: Board::new(
