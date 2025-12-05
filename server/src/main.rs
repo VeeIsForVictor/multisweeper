@@ -67,28 +67,34 @@ fn read_command() -> Command {
     println!("'r [x] [y]' to reveal a tile\n'f [x] [y]' to flag a tile\n'q' to quit\nNote that (x, y) input is 1-indexed from top-left");
     loop {
         let mut input = String::new();
-        let _ = std::io::stdin().read_line(&mut input);
-        
-        let Some(char) = input.get(0..1) else {
+        if std::io::stdin().read_line(&mut input).is_err() {
             continue;
+        }
+
+        let mut parts = input.split_whitespace();
+        let cmd = match parts.next() {
+            Some(c) => c,
+            None => continue,
         };
 
-        let args: Vec<&str> = input.split(" ").map(|str| str.trim()).collect();
-        return match char {
-            "r" => {
-                if args.len() != 3 {
-                    continue;
-                }
-                return Command::Reveal { x: args[1].parse().unwrap(), y: args[2].parse().unwrap() }
-            },
-            "f" => {
-                if args.len() != 3 {
-                    continue;
-                }
-                return Command::Flag { x: args[1].parse().unwrap(), y: args[2].parse().unwrap() }
-            },
-            "q" => Command::Quit,
-            _ => continue
+        match cmd {
+            "q" => return Command::Quit,
+            "r" | "f" => {
+                let x = match parts.next().and_then(|s| s.parse::<u8>().ok()) {
+                    Some(v) => v,
+                    None => continue,
+                };
+                let y = match parts.next().and_then(|s| s.parse::<u8>().ok()) {
+                    Some(v) => v,
+                    None => continue,
+                };
+                return if cmd == "r" {
+                    Command::Reveal { x, y }
+                } else {
+                    Command::Flag { x, y }
+                };
+            }
+            _ => continue,
         }
     }
 }
