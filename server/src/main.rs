@@ -39,6 +39,7 @@ fn main() {
         }
 
         let result = game.handle_action(command.to_game_action().unwrap());
+        print!("{}[2J", 27 as char);
 
         let Ok(phase) = result else {
             continue
