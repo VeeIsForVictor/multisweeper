@@ -16,7 +16,7 @@ pub enum RevealResult {
     Mine,
     Empty,
     Number(u8),
-    DoNothing
+    DoNothing,
 }
 
 #[derive(Debug)]
@@ -50,9 +50,10 @@ impl Board {
     }
 
     pub fn is_all_safe_cells_revealed(&self) -> bool {
-        return self.cells.iter().all(
-            |row| row.iter().all(|cell| cell.is_safe())
-        )
+        return self
+            .cells
+            .iter()
+            .all(|row| row.iter().all(|cell| cell.is_safe()));
     }
 
     fn evaluate_neighbors(&mut self, x: u8, y: u8) {

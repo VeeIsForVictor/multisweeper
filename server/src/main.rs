@@ -6,18 +6,18 @@ use game::*;
 enum Command {
     Reveal { x: u8, y: u8 },
     Flag { x: u8, y: u8 },
-    Quit
+    Quit,
 }
 
 #[derive(Debug)]
-struct CommandError; 
+struct CommandError;
 
 impl Command {
     fn to_game_action(&self) -> Result<GameAction, CommandError> {
         match self {
             Self::Reveal { x, y } => Ok(GameAction::REVEAL { x: x - 1, y: y - 1 }),
             Self::Flag { x, y } => Ok(GameAction::FLAG { x: x - 1, y: y - 1 }),
-            _  => Err(CommandError)
+            _ => Err(CommandError),
         }
     }
 }
@@ -41,20 +41,18 @@ fn main() {
         let result = game.handle_action(command.to_game_action().unwrap());
         print!("{}[2J", 27 as char);
 
-        let Ok(phase) = result else {
-            continue
-        };
+        let Ok(phase) = result else { continue };
 
         match phase {
             GamePhase::WON => {
                 println!("you won!\n{}", game);
                 break;
-            },
+            }
             GamePhase::LOST => {
                 game.lose_game();
                 println!("you lost!\n{}", game);
                 break;
-            },
+            }
             GamePhase::PLAYING => (),
             GamePhase::STALLED => {
                 println!("invalid move");
@@ -64,7 +62,9 @@ fn main() {
 }
 
 fn read_command() -> Command {
-    println!("'r [x] [y]' to reveal a tile\n'f [x] [y]' to flag a tile\n'q' to quit\nNote that (x, y) input is 1-indexed from top-left");
+    println!(
+        "'r [x] [y]' to reveal a tile\n'f [x] [y]' to flag a tile\n'q' to quit\nNote that (x, y) input is 1-indexed from top-left"
+    );
     loop {
         let mut input = String::new();
         if std::io::stdin().read_line(&mut input).is_err() {
