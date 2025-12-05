@@ -57,6 +57,7 @@ impl Game {
         self.board.is_coordinate_valid(x, y)
     }
 
+    #[tracing::instrument(skip(self))]
     fn reveal(&mut self, x: u8, y: u8) -> Result<GamePhase, GameError> {
         if !self.is_coordinate_valid(x, y) {
             return Err(GameError);
@@ -74,6 +75,7 @@ impl Game {
         }
     }
 
+    #[tracing::instrument(skip(self))]
     fn flag(&mut self, x: u8, y: u8) -> Result<GamePhase, GameError> {
         match self.board.flag(x, y) {
             Ok(()) => Ok(GamePhase::PLAYING),
@@ -81,6 +83,7 @@ impl Game {
         }
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn handle_action(&mut self, action: GameAction) -> Result<GamePhase, GameError> {
         match action {
             GameAction::REVEAL { x, y } => {
