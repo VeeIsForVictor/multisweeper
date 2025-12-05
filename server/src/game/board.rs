@@ -84,8 +84,15 @@ impl Board {
     pub fn new(width: u8, height: u8, number_of_mines: u8) -> Self {
         let mut cells = vec![];
         let mut created_mines: Vec<(u8, u8)> = vec![];
-        for _i in 0..number_of_mines {
-            created_mines.push((random_range(0..width), random_range(0..height)));
+        while created_mines.len() < number_of_mines.into() {
+            let (x, y) = (random_range(0..width), random_range(0..height));
+            
+            // prevent duplicates
+            if created_mines.contains(&(x, y)) {
+                break;
+            }
+
+            created_mines.push((x, y));
         }
 
         for y in 0..height {
