@@ -23,7 +23,7 @@ impl Command {
 }
 
 fn main() {
-    let mut game = Game::new(GameDifficulty::EASY);
+    let mut game = Game::new(GameDifficulty::TEST);
 
     println!("Welcome to Multisweeper [test]!");
 

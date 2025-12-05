@@ -16,6 +16,7 @@ pub enum GameAction {
 
 #[derive(Debug, Clone, Copy)]
 pub enum GameDifficulty {
+    TEST = 1,
     EASY = 2,
     MEDIUM = 4,
     HARD = 5,
