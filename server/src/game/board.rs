@@ -86,7 +86,7 @@ impl Board {
         let mut created_mines: Vec<(u8, u8)> = vec![];
         while created_mines.len() < number_of_mines.into() {
             let (x, y) = (random_range(0..width), random_range(0..height));
-            
+
             // prevent duplicates
             if created_mines.contains(&(x, y)) {
                 break;
@@ -234,6 +234,6 @@ impl Cell {
     }
 
     fn is_safe(&self) -> bool {
-        return self.is_mine ^ !self.is_revealed;
+        return self.is_mine ^ self.is_revealed;
     }
 }
