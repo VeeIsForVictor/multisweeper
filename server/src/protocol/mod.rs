@@ -2,11 +2,14 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ClientMessage {
-    Ping{ time: u128 }
+    CreateLobby,
+    JoinLobby { code: String },
+    StartGame
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ServerMessage {
-    Pong{ ping_time: u128, pong_time: u128 },
+    LobbyState { players: Vec<String>, host_id: String },
+    GameStarted,
     Error(String)
 }
