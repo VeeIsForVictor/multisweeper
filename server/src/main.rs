@@ -20,7 +20,7 @@ async fn main() {
     println!("WebSocket server is now open at port 8080");
 
     while let Ok((stream, _)) = listener.accept().await {
-        handle_connection(stream).await;
+        handle_connection(stream, state.clone()).await;
     }
 }
 
