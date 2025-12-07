@@ -5,7 +5,6 @@ use std::fmt::Display;
 
 use board::Board;
 use error::GameError;
-use tracing::trace;
 
 use crate::game::board::RevealResult;
 

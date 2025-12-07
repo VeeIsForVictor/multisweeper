@@ -1,7 +1,6 @@
 use std::fmt::Display;
 
 use rand::random_range;
-use tracing::{Level, span};
 
 #[derive(Debug, Clone)]
 pub struct BoardError;
