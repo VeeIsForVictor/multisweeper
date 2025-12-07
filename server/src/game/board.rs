@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
-use rand::random_range;
+use rand::{Rng, SeedableRng, random};
+use rand_pcg::Pcg64;
 
 #[derive(Debug, Clone)]
 pub struct BoardError;
@@ -25,6 +26,7 @@ pub struct Board {
     pub height: u8,
     created_mines: Vec<(u8, u8)>,
     cells: Vec<Vec<Cell>>,
+    seed: u64
 }
 
 impl Display for Board {
@@ -83,12 +85,17 @@ impl Board {
         }
     }
 
+    pub fn new_from_scratch(width: u8, height: u8, number_of_mines: u8) -> Self {
+        return Self::new(width, height, number_of_mines, random())
+    }
+
     #[tracing::instrument]
-    pub fn new(width: u8, height: u8, number_of_mines: u8) -> Self {
+    pub fn new(width: u8, height: u8, number_of_mines: u8, seed: u64) -> Self {
         let mut cells = vec![];
         let mut created_mines: Vec<(u8, u8)> = vec![];
+        let mut rng = Pcg64::seed_from_u64(seed);
         while created_mines.len() < number_of_mines.into() {
-            let (x, y) = (random_range(0..width), random_range(0..height));
+            let (x, y) = (rng.random_range(0..width), rng.random_range(0..height));
 
             // prevent duplicates
             if created_mines.contains(&(x, y)) {
@@ -112,6 +119,7 @@ impl Board {
             height,
             created_mines,
             cells,
+            seed
         };
 
         board.evaluate_cells();
