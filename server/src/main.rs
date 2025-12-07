@@ -1,18 +1,21 @@
-use std::time::SystemTime;
-use tokio::net::TcpListener;
+use std::{sync::Arc, time::SystemTime};
+use tokio::{net::TcpListener, sync::RwLock};
 use tokio_tungstenite::{accept_async, tungstenite::Message};
 use futures_util::{SinkExt, stream::StreamExt};
 use tracing::info;
-use crate::protocol::{ClientMessage, ServerMessage};
+
+use crate::{protocol::{ClientMessage, ServerMessage}, server::SharedState};
 
 mod game;
 mod cli_local;
 mod protocol;
+mod server;
 
 #[tokio::main]
 #[tracing::instrument]
 async fn main() {
     tracing_forest::init();
+    let state = Arc::new(RwLock::new(SharedState {}));
     let listener = TcpListener::bind("localhost:8080").await.expect("failed to bind to port");
     println!("WebSocket server is now open at port 8080");
 
@@ -22,7 +25,7 @@ async fn main() {
 }
 
 #[tracing::instrument(skip_all)]
-async fn handle_connection(stream : tokio::net::TcpStream) {
+async fn handle_connection(stream : tokio::net::TcpStream, state: Arc<RwLock<SharedState>>) {
     let ws_stream = accept_async(stream).await.expect("failed to wrap websocket stream");
     let (mut tx, mut rx) = ws_stream.split();
 
