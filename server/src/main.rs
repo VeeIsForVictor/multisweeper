@@ -1,10 +1,8 @@
 use std::time::SystemTime;
-
 use tokio::net::TcpListener;
 use tokio_tungstenite::{accept_async, tungstenite::Message};
 use futures_util::{SinkExt, stream::StreamExt};
 use tracing::info;
-
 use crate::protocol::{ClientMessage, ServerMessage};
 
 mod game;
