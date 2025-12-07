@@ -31,24 +31,27 @@ async fn handle_connection(stream : tokio::net::TcpStream, state: Arc<RwLock<Sha
 
     while let Some(Ok(msg)) = rx.next().await {
         let bytes = msg.into_data();
-        match rmp_serde::from_slice::<ClientMessage>(&bytes) {
+        match serde_json::from_slice::<ClientMessage>(&bytes) {
             Ok(ClientMessage::Ping { time }) => {
                 info!(immediate = true, "Received PING at {}", time);
                 let time_now = 
                     SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("could not get system time");
                 let server_data = ServerMessage::Pong { ping_time: time, pong_time: time_now.as_millis()};
-                if let Ok(response_data) = rmp_serde::to_vec(&server_data) {
-                    tx.send(Message::Binary(response_data.into())).await.expect("failed to send response!");
+                if let Ok(response_data) = serde_json::to_string(&server_data) {
+                    tx.send(Message::Text(response_data.into())).await.expect("failed to send response!");
                 }
                 info!(immediate = true, "Sent PONG at {}", time_now.as_millis());
             }
             Err(e) => {
                 eprintln!("failed to deserialize as client message: {}", e);
                 let server_data = ServerMessage::Error(String::from("failed to deserialize as ClientMessage"));
-                if let Ok(response_data) = rmp_serde::to_vec(&server_data) {
-                    tx.send(Message::Binary(response_data.into())).await.expect("failed to send error response!");
+                if let Ok(response_data) = serde_json::to_string(&server_data) {
+                    tx.send(Message::Text(response_data.into())).await.expect("failed to send error response!");
                 }
                 info!(immediate = true, "Sent ERROR");
+            }
+            _ => {
+                info!("other messages received")
             }
         }
     }
