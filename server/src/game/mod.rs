@@ -38,12 +38,13 @@ impl Display for Game {
 
 impl Game {
     #[tracing::instrument]
-    pub fn new(difficulty: GameDifficulty) -> Self {
+    pub fn new(difficulty: GameDifficulty, seed: u64) -> Self {
         Game {
             board: Board::new(
                 (difficulty as u8) * 4,
                 (difficulty as u8) * 4,
                 (difficulty as u8) * 3,
+                seed
             ),
             difficulty,
             state: GameState {

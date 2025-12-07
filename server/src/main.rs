@@ -1,6 +1,7 @@
 mod game;
 
 use game::*;
+use rand::random;
 
 #[derive(Debug)]
 enum Command {
@@ -26,7 +27,7 @@ impl Command {
 fn main() {
     tracing_forest::init();
 
-    let mut game = Game::new(GameDifficulty::TEST);
+    let mut game = Game::new(GameDifficulty::TEST, random());
 
     println!("Welcome to Multisweeper [test]!");
 

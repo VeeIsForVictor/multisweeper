@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use rand::{Rng, SeedableRng, random};
+use rand::{Rng, SeedableRng};
 use rand_pcg::Pcg64;
 
 #[derive(Debug, Clone)]
@@ -83,10 +83,6 @@ impl Board {
         for (row_idx, col_idx) in created_mines {
             self.evaluate_neighbors(row_idx, col_idx);
         }
-    }
-
-    pub fn new_from_scratch(width: u8, height: u8, number_of_mines: u8) -> Self {
-        return Self::new(width, height, number_of_mines, random())
     }
 
     #[tracing::instrument]
