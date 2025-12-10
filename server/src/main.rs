@@ -1,10 +1,10 @@
-use std::{collections::HashMap, sync::Arc, time::SystemTime};
-use tokio::{net::TcpListener, sync::RwLock};
+use std::sync::Arc;
+use tokio::{net::TcpListener, sync::{RwLock, mpsc}};
 use tokio_tungstenite::{accept_async, tungstenite::Message};
 use futures_util::{SinkExt, stream::StreamExt};
-use tracing::info;
 
-use ws::{protocol::{ClientMessage, ServerMessage},SharedState};
+use ws::{protocol::{ClientMessage, ServerMessage}, SharedState};
+use crate::ws::protocol::LobbyCommand;
 
 mod game;
 mod cli_local;
@@ -31,7 +31,14 @@ async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<RwLock<Shar
         let bytes = msg.into_data();
         match serde_json::from_slice::<ClientMessage>(&bytes) {
             Ok(client_msg) => {
-                
+                match client_msg {
+                    ClientMessage::CreateLobby => {
+                        let (cmd_sdr, cmd_rcr) = mpsc::channel::<LobbyCommand>(32);
+                    },
+                    _ => {
+                        todo!();
+                    }
+                }
             }
             Err(e) => {
                 eprintln!("failed to deserialize as client message: {}", e);
