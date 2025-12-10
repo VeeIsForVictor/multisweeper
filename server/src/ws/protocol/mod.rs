@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc;
 use crate::ws::PlayerId;
 use super::lobby::LobbyStatus;
 
@@ -6,6 +7,12 @@ use super::lobby::LobbyStatus;
 pub enum ClientMessage {
     CreateLobby,
     JoinLobby { code: String },
+    StartGame
+}
+
+pub enum LobbyCommand {
+    AddPlayer { id: PlayerId, msg_sdr: mpsc::Sender<ServerMessage> },
+    RemovePlayer(PlayerId),
     StartGame
 }
 

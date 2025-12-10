@@ -11,12 +11,6 @@ pub enum LobbyStatus {
     Starting
 }
 
-pub enum LobbyCommand {
-    AddPlayer { id: PlayerId, msg_sdr: mpsc::Sender<ServerMessage> },
-    RemovePlayer(PlayerId),
-    StartGame
-}
-
 struct Lobby {
     players: Vec<PlayerId>,
     host_id: PlayerId,

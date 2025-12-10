@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use tokio::sync::mpsc;
 
-use crate::ws::lobby::{LobbyCode, LobbyCommand};
+use crate::ws::{lobby::LobbyCode, protocol::LobbyCommand};
 
 mod lobby;
 pub mod protocol;
