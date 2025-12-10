@@ -4,8 +4,8 @@ use crate::ws::PlayerId;
 use super::lobby::LobbyStatus;
 
 pub struct PlayerConnection {
-    action_sdr: Sender<ClientMessage>,
-    message_sdr: Sender<ServerMessage>
+    pub action_sdr: Sender<ClientMessage>,
+    pub message_sdr: Sender<ServerMessage>
 }
 
 #[derive(Debug, Serialize, Deserialize)]
