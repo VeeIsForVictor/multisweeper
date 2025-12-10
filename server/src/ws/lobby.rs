@@ -2,7 +2,7 @@ use std::sync::mpsc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::ws::protocol::ServerMessage;
+use crate::ws::{PlayerId, protocol::ServerMessage};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum LobbyStatus {
@@ -11,13 +11,13 @@ pub enum LobbyStatus {
 }
 
 pub enum LobbyCommand {
-    AddPlayer { id: String, msg_sdr: mpsc::Sender<ServerMessage> },
-    RemovePlayer(String),
+    AddPlayer { id: PlayerId, msg_sdr: mpsc::Sender<ServerMessage> },
+    RemovePlayer(PlayerId),
     StartGame
 }
 
 struct Lobby {
-    players: Vec<String>,
-    host_id: String,
+    players: Vec<PlayerId>,
+    host_id: PlayerId,
     status: LobbyStatus
 }

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use crate::ws::PlayerId;
 use super::lobby::LobbyStatus;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -10,7 +11,7 @@ pub enum ClientMessage {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ServerMessage {
-    LobbyState { players: Vec<String>, host_id: String, status: LobbyStatus },
+    LobbyState { players: Vec<PlayerId>, host_id: PlayerId, status: LobbyStatus },
     GameStarted,
     Error(String)
 }
