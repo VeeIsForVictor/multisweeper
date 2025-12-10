@@ -1,4 +1,8 @@
+use std::sync::mpsc;
+
 use serde::{Deserialize, Serialize};
+
+use crate::ws::protocol::ServerMessage;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum LobbyStatus {
@@ -7,7 +11,9 @@ pub enum LobbyStatus {
 }
 
 pub enum LobbyCommand {
-    AddPlayer { id: String,  }
+    AddPlayer { id: String, msg_sdr: mpsc::Sender<ServerMessage> },
+    RemovePlayer(String),
+    StartGame
 }
 
 struct Lobby {
