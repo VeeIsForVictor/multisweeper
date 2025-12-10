@@ -4,11 +4,11 @@ use tokio_tungstenite::{accept_async, tungstenite::Message};
 use futures_util::{SinkExt, stream::StreamExt};
 use tracing::info;
 
-use server::{protocol::{ClientMessage, ServerMessage},SharedState};
+use ws::{protocol::{ClientMessage, ServerMessage},SharedState};
 
 mod game;
 mod cli_local;
-mod server;
+mod ws;
 
 #[tokio::main]
 #[tracing::instrument]
