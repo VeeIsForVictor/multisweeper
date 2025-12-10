@@ -11,3 +11,11 @@ pub type PlayerId = String;
 pub struct SharedState {
     lobbies: HashMap<LobbyCode, mpsc::Sender<LobbyCommand>>
 }
+
+impl SharedState {
+    pub fn new() -> Self {
+        SharedState {
+            lobbies: HashMap::new()
+        }
+    }
+}
