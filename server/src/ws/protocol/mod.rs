@@ -1,10 +1,5 @@
 use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Serialize, Deserialize)]
-pub enum LobbyStatus {
-    Waiting,
-    Starting
-}
+use super::lobby::LobbyStatus;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ClientMessage {
