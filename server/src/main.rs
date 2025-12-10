@@ -39,7 +39,8 @@ async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<RwLock<Shar
                 if let Ok(response_data) = serde_json::to_string(&server_data) {
                     tx.send(Message::Text(response_data.into())).await.expect("failed to send error response!");
                 }
-                info!(immediate = true, "Sent ERROR");
+                // end connection
+                tx.close().await.expect("failed to close connection properly");
             }
         }
     }
