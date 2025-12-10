@@ -9,3 +9,9 @@ pub enum LobbyStatus {
 pub enum LobbyCommand {
     AddPlayer { id: String,  }
 }
+
+struct Lobby {
+    players: Vec<String>,
+    host_id: String,
+    status: LobbyStatus
+}
