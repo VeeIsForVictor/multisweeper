@@ -1,7 +1,12 @@
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc;
+use tokio::sync::mpsc::{self, Sender};
 use crate::ws::PlayerId;
 use super::lobby::LobbyStatus;
+
+pub struct PlayerConnection {
+    action_sdr: Sender<ClientMessage>,
+    message_sdr: Sender<ServerMessage>
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ClientMessage {

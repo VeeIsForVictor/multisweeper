@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use tokio::sync::mpsc;
+use tokio::sync::mpsc::{self, Receiver, Sender};
 
 use crate::ws::{lobby::LobbyCode, protocol::LobbyCommand};
 
@@ -18,4 +18,8 @@ impl SharedState {
             lobbies: HashMap::new()
         }
     }
+}
+
+pub fn lobby_manager_task(mut cmd_rcr: Receiver<LobbyCommand>) {
+
 }

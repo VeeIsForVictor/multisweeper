@@ -1,7 +1,7 @@
-use tokio::sync::mpsc;
+use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
-use crate::ws::{PlayerId, protocol::ServerMessage};
+use crate::ws::{PlayerId, protocol::PlayerConnection};
 
 pub type LobbyCode = String;
 
@@ -12,7 +12,7 @@ pub enum LobbyStatus {
 }
 
 struct Lobby {
-    players: Vec<PlayerId>,
+    players: HashMap<PlayerId, PlayerConnection>,
     host_id: PlayerId,
     status: LobbyStatus
 }
