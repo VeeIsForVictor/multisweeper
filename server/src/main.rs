@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::SystemTime};
+use std::{collections::HashMap, sync::Arc, time::SystemTime};
 use tokio::{net::TcpListener, sync::RwLock};
 use tokio_tungstenite::{accept_async, tungstenite::Message};
 use futures_util::{SinkExt, stream::StreamExt};
@@ -14,7 +14,7 @@ mod ws;
 #[tracing::instrument]
 async fn main() {
     tracing_forest::init();
-    let state = Arc::new(RwLock::new(SharedState {}));
+    let state = Arc::new(RwLock::new(SharedState::new()));
     let listener = TcpListener::bind("localhost:8080").await.expect("failed to bind to port");
     println!("WebSocket server is now open at port 8080");
 
@@ -23,23 +23,15 @@ async fn main() {
     }
 }
 
-#[tracing::instrument(skip_all)]
-async fn handle_connection(stream : tokio::net::TcpStream, state: Arc<RwLock<SharedState>>) {
+async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<RwLock<SharedState>>) {
     let ws_stream = accept_async(stream).await.expect("failed to wrap websocket stream");
     let (mut tx, mut rx) = ws_stream.split();
 
     while let Some(Ok(msg)) = rx.next().await {
         let bytes = msg.into_data();
         match serde_json::from_slice::<ClientMessage>(&bytes) {
-            Ok(ClientMessage::Ping { time }) => {
-                info!(immediate = true, "Received PING at {}", time);
-                let time_now = 
-                    SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("could not get system time");
-                let server_data = ServerMessage::Pong { ping_time: time, pong_time: time_now.as_millis()};
-                if let Ok(response_data) = serde_json::to_string(&server_data) {
-                    tx.send(Message::Text(response_data.into())).await.expect("failed to send response!");
-                }
-                info!(immediate = true, "Sent PONG at {}", time_now.as_millis());
+            Ok(client_msg) => {
+                
             }
             Err(e) => {
                 eprintln!("failed to deserialize as client message: {}", e);
@@ -48,9 +40,6 @@ async fn handle_connection(stream : tokio::net::TcpStream, state: Arc<RwLock<Sha
                     tx.send(Message::Text(response_data.into())).await.expect("failed to send error response!");
                 }
                 info!(immediate = true, "Sent ERROR");
-            }
-            _ => {
-                info!("other messages received")
             }
         }
     }
