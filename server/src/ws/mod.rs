@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use rand::{Rng, SeedableRng};
 use rand_pcg::Pcg64;
 use tokio::sync::mpsc::{self, Receiver, Sender};
-use tokio_tungstenite::tungstenite::http::status;
 
 use crate::ws::{lobby::{Lobby, LobbyCode, LobbyStatus}, protocol::{ClientMessage, LobbyCommand, PlayerConnection, ServerMessage}};
 
@@ -28,7 +27,7 @@ impl SharedState {
         }
     }
 
-    pub fn register_player(&mut self, mut action_sdr: Sender<ClientMessage>, mut message_sdr: Sender<ServerMessage>) -> PlayerId {
+    pub fn register_player(&mut self, action_sdr: Sender<ClientMessage>, message_sdr: Sender<ServerMessage>) -> PlayerId {
         let connection = PlayerConnection { action_sdr: action_sdr, message_sdr: message_sdr };
         let player_id: PlayerId = format!("player {}", self.latest_player_id_number);
         self.latest_player_id_number += 1;
@@ -36,7 +35,7 @@ impl SharedState {
         return player_id;
     }
 
-    pub fn register_lobby(&mut self, mut cmd_sdr: Sender<LobbyCommand>) -> LobbyCode {
+    pub fn register_lobby(&mut self, cmd_sdr: Sender<LobbyCommand>) -> LobbyCode {
         let lobby_code = self.rng.random_range(1000..=9999).to_string();
         self.lobbies.insert(lobby_code.clone(), cmd_sdr);
         return lobby_code;
@@ -57,7 +56,7 @@ impl SharedState {
     }
 }
 
-
+#[tracing::instrument]
 pub async fn lobby_manager_task(mut cmd_rcr: Receiver<LobbyCommand>, host_player: (PlayerId, PlayerConnection)) {
     let (host_id, connection) = host_player;
     
