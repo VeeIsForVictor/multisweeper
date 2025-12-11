@@ -2,8 +2,9 @@ use std::collections::HashMap;
 use rand::{Rng, SeedableRng};
 use rand_pcg::Pcg64;
 use tokio::sync::mpsc::{self, Receiver, Sender};
+use tokio_tungstenite::tungstenite::http::status;
 
-use crate::ws::{lobby::{Lobby, LobbyCode}, protocol::{ClientMessage, LobbyCommand, PlayerConnection, ServerMessage}};
+use crate::ws::{lobby::{Lobby, LobbyCode, LobbyStatus}, protocol::{ClientMessage, LobbyCommand, PlayerConnection, ServerMessage}};
 
 mod lobby;
 pub mod protocol;
@@ -56,8 +57,7 @@ pub async fn lobby_manager_task(mut cmd_rcr: Receiver<LobbyCommand>, host_player
     let mut lobby = Lobby::new(host_id, connection);
     lobby.broadcast_state().await;
 
-    let game = while let Some(cmd) = cmd_rcr.recv().await {
-        let mut is_starting_game = false;
+    while let Some(cmd) = cmd_rcr.recv().await {
         match cmd {
             LobbyCommand::AddPlayer { id, player_connection } => {
                 lobby.register_player(id, player_connection);
@@ -67,10 +67,13 @@ pub async fn lobby_manager_task(mut cmd_rcr: Receiver<LobbyCommand>, host_player
                 // TODO: handle returning player to idle
             },
             LobbyCommand::StartGame => {
-                is_starting_game = true;
+                lobby.start_game();
             },
         }
         lobby.broadcast_state().await;
-        
+
+        if let LobbyStatus::Starting = lobby.status {
+            lobby.broadcast_message(ServerMessage::GameStarted).await;
+        }
     }
 }

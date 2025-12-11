@@ -15,7 +15,7 @@ pub enum LobbyStatus {
 pub struct Lobby {
     players: HashMap<PlayerId, PlayerConnection>,
     host_id: PlayerId,
-    status: LobbyStatus
+    pub status: LobbyStatus
 }
 
 impl Lobby {
@@ -41,6 +41,10 @@ impl Lobby {
             Some(conn) => Some((player_id, conn)),
             None => None
         }
+    }
+
+    pub fn start_game(&mut self) {
+        self.status = LobbyStatus::Starting;
     }
 
     pub async fn broadcast_state(&mut self) {
