@@ -23,7 +23,7 @@ impl Lobby {
         let mut lobby = Lobby {
             players: HashMap::new(),
             host_id: host_id.clone(),
-            status: LobbyStatus::Starting
+            status: LobbyStatus::Waiting
         };
 
         lobby.players.insert(host_id, host_connection);

@@ -3,7 +3,7 @@ use rand::{Rng, SeedableRng};
 use rand_pcg::Pcg64;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
-use crate::ws::{lobby::LobbyCode, protocol::{ClientMessage, LobbyCommand, PlayerConnection, ServerMessage}};
+use crate::ws::{lobby::{Lobby, LobbyCode}, protocol::{ClientMessage, LobbyCommand, PlayerConnection, ServerMessage}};
 
 mod lobby;
 pub mod protocol;
@@ -41,11 +41,25 @@ impl SharedState {
         return lobby_code;
     }
 
-    pub fn de_idle_player_by_id(&mut self, player_id: &PlayerId) -> Option<PlayerConnection> {
-        return self.idle_players.remove(player_id);
+    pub fn de_idle_player_by_id(&mut self, player_id: PlayerId) -> Option<(PlayerId, PlayerConnection)> {
+        match self.idle_players.remove(&player_id) {
+            Some(conn) => Some((player_id, conn)),
+            None => None
+        }
     }
 }
 
-pub async fn lobby_manager_task(mut cmd_rcr: Receiver<LobbyCommand>, host_player: PlayerConnection) {
 
+pub async fn lobby_manager_task(mut cmd_rcr: Receiver<LobbyCommand>, host_player: (PlayerId, PlayerConnection)) {
+    let (host_id, connection) = host_player;
+    
+    let lobby = Lobby::new(host_id, connection);
+
+    while let Some(cmd) = cmd_rcr.recv().await {
+        match cmd {
+            LobbyCommand::AddPlayer { id, msg_sdr } => todo!(),
+            LobbyCommand::RemovePlayer(_) => todo!(),
+            LobbyCommand::StartGame => todo!(),
+        }
+    }
 }
