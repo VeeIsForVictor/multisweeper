@@ -4,7 +4,7 @@ use tokio_tungstenite::{accept_async, tungstenite::Message};
 use futures_util::{SinkExt, stream::StreamExt};
 
 use ws::{protocol::{ClientMessage, ServerMessage}, SharedState};
-use crate::ws::protocol::{LobbyCommand, PlayerConnection};
+use crate::ws::{lobby_manager_task, protocol::{LobbyCommand, PlayerConnection}};
 
 mod game;
 mod cli_local;
@@ -30,7 +30,7 @@ async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<RwLock<Shar
     let (mut action_sdr, mut action_rcr) = mpsc::channel::<ClientMessage>(32);
     let (mut message_sdr, mut message_rcr) = mpsc::channel::<ServerMessage>(32);
 
-    state.get_mut().register_player(action_sdr, message_sdr);
+    let player_id = state.write().await.register_player(action_sdr, message_sdr);
 
     while let Some(Ok(msg)) = rx.next().await {
         let bytes = msg.into_data();
@@ -39,7 +39,8 @@ async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<RwLock<Shar
                 match client_msg {
                     ClientMessage::CreateLobby => {
                         let (cmd_sdr, cmd_rcr) = mpsc::channel::<LobbyCommand>(32);
-                        tokio::spawn()
+                        let host_player = state.write().await.de_idle_player_by_id(&player_id).unwrap();
+                        tokio::spawn(lobby_manager_task(cmd_rcr, host_player));
                     },
                     _ => {
                         todo!();
