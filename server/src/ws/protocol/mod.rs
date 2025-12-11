@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc::{self, Sender};
+use tokio::sync::mpsc::Sender;
 use crate::ws::PlayerId;
 use super::lobby::LobbyStatus;
 
