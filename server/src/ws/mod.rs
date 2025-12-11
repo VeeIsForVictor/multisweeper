@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use rand::SeedableRng;
+use rand::{Rng, SeedableRng};
 use rand_pcg::Pcg64;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
@@ -36,7 +36,9 @@ impl SharedState {
     }
 
     pub fn register_lobby(&mut self, mut cmd_sdr: Sender<LobbyCommand>) -> LobbyCode {
-        
+        let lobby_code = self.rng.random_range(1000..=9999).to_string();
+        self.lobbies.insert(lobby_code.clone(), cmd_sdr);
+        return lobby_code;
     }
 
     pub fn de_idle_player_by_id(&mut self, player_id: &PlayerId) -> Option<PlayerConnection> {
