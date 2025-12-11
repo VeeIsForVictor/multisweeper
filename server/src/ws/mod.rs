@@ -42,6 +42,13 @@ impl SharedState {
         return lobby_code;
     }
 
+    pub fn get_lobby(&self, lobby_code: LobbyCode) -> Option<(LobbyCode, &Sender<LobbyCommand>)> {
+        match self.lobbies.get(&lobby_code) {
+            Some(handle) => Some((lobby_code, handle)),
+            None => None
+        }
+    }
+
     pub fn de_idle_player_by_id(&mut self, player_id: PlayerId) -> Option<(PlayerId, PlayerConnection)> {
         match self.idle_players.remove(&player_id) {
             Some(conn) => Some((player_id, conn)),

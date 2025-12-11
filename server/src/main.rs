@@ -43,6 +43,12 @@ async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<RwLock<Shar
                         state.write().await.register_lobby(cmd_sdr);
                         tokio::spawn(lobby_manager_task(cmd_rcr, host_player));
                     },
+                    ClientMessage::JoinLobby { code } => {
+                        let state_read = state.read().await;
+                        let (code, handle) = state_read.get_lobby(code).unwrap();
+                        let (player_id, conn) = state.write().await.de_idle_player_by_id(player_id.clone()).unwrap();
+                        handle.send(LobbyCommand::AddPlayer { id: player_id, player_connection: conn }).await.unwrap();
+                    }
                     _ => {
                         todo!();
                     }
