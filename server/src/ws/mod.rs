@@ -53,13 +53,17 @@ impl SharedState {
 pub async fn lobby_manager_task(mut cmd_rcr: Receiver<LobbyCommand>, host_player: (PlayerId, PlayerConnection)) {
     let (host_id, connection) = host_player;
     
-    let lobby = Lobby::new(host_id, connection);
+    let mut lobby = Lobby::new(host_id, connection);
+    lobby.broadcast_state().await;
 
     while let Some(cmd) = cmd_rcr.recv().await {
         match cmd {
-            LobbyCommand::AddPlayer { id, msg_sdr } => todo!(),
+            LobbyCommand::AddPlayer { id, player_connection } => {
+                lobby.register_player(id, player_connection);
+            },
             LobbyCommand::RemovePlayer(_) => todo!(),
             LobbyCommand::StartGame => todo!(),
         }
+        lobby.broadcast_state().await;
     }
 }

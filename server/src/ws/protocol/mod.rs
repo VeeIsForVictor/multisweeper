@@ -16,7 +16,7 @@ pub enum ClientMessage {
 }
 
 pub enum LobbyCommand {
-    AddPlayer { id: PlayerId, msg_sdr: mpsc::Sender<ServerMessage> },
+    AddPlayer { id: PlayerId, player_connection: PlayerConnection },
     RemovePlayer(PlayerId),
     StartGame
 }
