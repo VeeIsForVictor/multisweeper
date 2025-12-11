@@ -21,7 +21,7 @@ pub enum LobbyCommand {
     StartGame
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum ServerMessage {
     LobbyState { players: Vec<PlayerId>, host_id: PlayerId, status: LobbyStatus },
     GameStarted,

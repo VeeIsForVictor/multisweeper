@@ -56,14 +56,21 @@ pub async fn lobby_manager_task(mut cmd_rcr: Receiver<LobbyCommand>, host_player
     let mut lobby = Lobby::new(host_id, connection);
     lobby.broadcast_state().await;
 
-    while let Some(cmd) = cmd_rcr.recv().await {
+    let game = while let Some(cmd) = cmd_rcr.recv().await {
+        let mut is_starting_game = false;
         match cmd {
             LobbyCommand::AddPlayer { id, player_connection } => {
                 lobby.register_player(id, player_connection);
             },
-            LobbyCommand::RemovePlayer(_) => todo!(),
-            LobbyCommand::StartGame => todo!(),
+            LobbyCommand::RemovePlayer(id) => {
+                lobby.deregister_player(id);
+                // TODO: handle returning player to idle
+            },
+            LobbyCommand::StartGame => {
+                is_starting_game = true;
+            },
         }
         lobby.broadcast_state().await;
+        
     }
 }
