@@ -32,37 +32,46 @@ async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<RwLock<Shar
 
     let player_id = state.write().await.register_player(action_sdr, message_sdr);
 
-    while let Some(Ok(msg)) = rx.next().await {
-        let bytes = msg.into_data();
-        match serde_json::from_slice::<ClientMessage>(&bytes) {
-            Ok(client_msg) => {
-                match client_msg {
-                    ClientMessage::CreateLobby => {
-                        let (cmd_sdr, cmd_rcr) = mpsc::channel::<LobbyCommand>(32);
-                        let host_player = state.write().await.de_idle_player_by_id(player_id.clone()).unwrap();
-                        state.write().await.register_lobby(cmd_sdr);
-                        tokio::spawn(lobby_manager_task(cmd_rcr, host_player));
-                    },
-                    ClientMessage::JoinLobby { code } => {
-                        let state_read = state.read().await;
-                        let (code, handle) = state_read.get_lobby(code).unwrap();
-                        let (player_id, conn) = state.write().await.de_idle_player_by_id(player_id.clone()).unwrap();
-                        handle.send(LobbyCommand::AddPlayer { id: player_id, player_connection: conn }).await.unwrap();
-                    }
-                    _ => {
-                        todo!();
+    let result = tokio::select! {
+        ws_msg = rx.next() => {
+            let Some(Ok(msg)) = ws_msg else {panic!()};
+            let bytes = msg.into_data();
+            match serde_json::from_slice::<ClientMessage>(&bytes) {
+                Ok(client_msg) => {
+                    match client_msg {
+                        ClientMessage::CreateLobby => {
+                            let (cmd_sdr, cmd_rcr) = mpsc::channel::<LobbyCommand>(32);
+                            let host_player = state.write().await.de_idle_player_by_id(player_id.clone()).unwrap();
+                            state.write().await.register_lobby(cmd_sdr);
+                            tokio::spawn(lobby_manager_task(cmd_rcr, host_player));
+                        },
+                        ClientMessage::JoinLobby { code } => {
+                            let state_read = state.read().await;
+                            let (code, handle) = state_read.get_lobby(code).unwrap();
+                            let (player_id, conn) = state.write().await.de_idle_player_by_id(player_id.clone()).unwrap();
+                            handle.send(LobbyCommand::AddPlayer { id: player_id, player_connection: conn }).await.unwrap();
+                        }
+                        _ => {
+                            todo!();
+                        }
                     }
                 }
-            }
-            Err(e) => {
-                eprintln!("failed to deserialize as client message: {}", e);
-                let server_data = ServerMessage::Error(String::from("failed to deserialize as ClientMessage"));
-                if let Ok(response_data) = serde_json::to_string(&server_data) {
-                    tx.send(Message::Text(response_data.into())).await.expect("failed to send error response!");
+                Err(e) => {
+                    eprintln!("failed to deserialize as client message: {}", e);
+                    let server_data = ServerMessage::Error(String::from("failed to deserialize as ClientMessage"));
+                    if let Ok(response_data) = serde_json::to_string(&server_data) {
+                        tx.send(Message::Text(response_data.into())).await.expect("failed to send error response!");
+                    }
+                    // end connection
+                    tx.close().await.expect("failed to close connection properly");
                 }
-                // end connection
-                tx.close().await.expect("failed to close connection properly");
             }
+        },
+
+        server_msg = message_rcr.recv() => {
+            let Some(msg) = server_msg else { panic!() };
+            let Ok(response) = serde_json::to_string(&msg) else { panic!() };
+            tx.send(Message::Text(response.into()));
         }
-    }
+    };
 }
