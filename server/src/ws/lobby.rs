@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Receiver;
+use tracing::warn;
 
 use crate::ws::{PlayerId, protocol::{LobbyCommand, PlayerConnection, ServerMessage}};
 
@@ -53,12 +54,12 @@ impl Lobby {
                 players: players_list.clone(), 
                 host_id: self.host_id.clone(), 
                 status: self.status.clone()
-        });
+        }).await;
     }
 
     pub async fn broadcast_message(&mut self, msg: ServerMessage) {
         for player in self.players.values() {
-            player.message_sdr.send(msg.clone());
+            player.message_sdr.send(msg.clone()).await;
         }
     }
 }
