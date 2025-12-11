@@ -36,14 +36,25 @@ impl Lobby {
         return player_id;
     }
 
+    pub fn deregister_player(&mut self, player_id: PlayerId) -> Option<(PlayerId, PlayerConnection)> {
+        match self.players.remove(&player_id) {
+            Some(conn) => Some((player_id, conn)),
+            None => None
+        }
+    }
+
     pub async fn broadcast_state(&mut self) {
         let players_list: Vec<PlayerId> = self.players.keys().cloned().collect();
-        for player in self.players.values() {
-            player.message_sdr.send(ServerMessage::LobbyState {
+        self.broadcast_message(ServerMessage::LobbyState {
                 players: players_list.clone(), 
                 host_id: self.host_id.clone(), 
                 status: self.status.clone()
-            }).await;
+        });
+    }
+
+    pub async fn broadcast_message(&mut self, msg: ServerMessage) {
+        for player in self.players.values() {
+            player.message_sdr.send(msg.clone());
         }
     }
 }
