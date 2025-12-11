@@ -3,6 +3,7 @@ use tokio::sync::mpsc::Sender;
 use crate::ws::PlayerId;
 use super::lobby::LobbyStatus;
 
+#[derive(Debug)]
 pub struct PlayerConnection {
     pub action_sdr: Sender<ClientMessage>,
     pub message_sdr: Sender<ServerMessage>
