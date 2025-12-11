@@ -20,7 +20,7 @@ async fn main() {
     println!("WebSocket server is now open at port 8080");
 
     while let Ok((stream, _)) = listener.accept().await {
-        handle_connection(stream, state.clone()).await;
+        tokio::spawn(handle_connection(stream, state.clone()));
     }
 }
 
@@ -44,8 +44,8 @@ async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<RwLock<Shar
                             ClientMessage::CreateLobby => {
                                 let (cmd_sdr, cmd_rcr) = mpsc::channel::<LobbyCommand>(32);
                                 let host_player = state.write().await.de_idle_player_by_id(player_id.clone()).unwrap();
-                                state.write().await.register_lobby(cmd_sdr);
-                                tokio::spawn(lobby_manager_task(cmd_rcr, host_player));
+                                let code = state.write().await.register_lobby(cmd_sdr);
+                                tokio::spawn(lobby_manager_task(cmd_rcr, host_player, code));
                             },
                             ClientMessage::JoinLobby { code } => {
                                 let state_read = state.read().await;
@@ -73,7 +73,7 @@ async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<RwLock<Shar
             server_msg = message_rcr.recv() => {
                 let Some(msg) = server_msg else { panic!() };
                 let Ok(response) = serde_json::to_string(&msg) else { panic!() };
-                tx.send(Message::Text(response.into()));
+                tx.send(Message::Text(response.into())).await;
             }
         };
     }

@@ -14,14 +14,16 @@ pub enum LobbyStatus {
 }
 
 pub struct Lobby {
+    code: LobbyCode,
     players: HashMap<PlayerId, PlayerConnection>,
     host_id: PlayerId,
-    pub status: LobbyStatus
+    pub status: LobbyStatus,
 }
 
 impl Lobby {
-    pub fn new(host_id: PlayerId, host_connection: PlayerConnection) -> Self {
+    pub fn new(host_id: PlayerId, host_connection: PlayerConnection, code: LobbyCode) -> Self {
         let mut lobby = Lobby {
+            code,
             players: HashMap::new(),
             host_id: host_id.clone(),
             status: LobbyStatus::Waiting
