@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use rand::SeedableRng;
+use rand_pcg::Pcg64;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
 use crate::ws::{lobby::LobbyCode, protocol::{ClientMessage, LobbyCommand, PlayerConnection, ServerMessage}};
@@ -11,15 +13,17 @@ pub type PlayerId = String;
 pub struct SharedState {
     lobbies: HashMap<LobbyCode, mpsc::Sender<LobbyCommand>>,
     idle_players: HashMap<PlayerId, PlayerConnection>,
-    latest_player_id_number: u32
+    latest_player_id_number: u32,
+    rng: Pcg64
 }
 
 impl SharedState {
-    pub fn new() -> Self {
+    pub fn new(seed: u64) -> Self {
         SharedState {
             lobbies: HashMap::new(),
             idle_players: HashMap::new(),
-            latest_player_id_number: 0
+            latest_player_id_number: 0,
+            rng: Pcg64::seed_from_u64(seed)
         }
     }
 
@@ -29,6 +33,10 @@ impl SharedState {
         self.latest_player_id_number += 1;
         self.idle_players.insert(player_id.clone(), connection);
         return player_id;
+    }
+
+    pub fn register_lobby(&mut self, mut cmd_sdr: Sender<LobbyCommand>) -> LobbyCode {
+        
     }
 
     pub fn de_idle_player_by_id(&mut self, player_id: &PlayerId) -> Option<PlayerConnection> {

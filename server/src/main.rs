@@ -14,7 +14,7 @@ mod ws;
 #[tracing::instrument]
 async fn main() {
     tracing_forest::init();
-    let state = Arc::new(RwLock::new(SharedState::new()));
+    let state = Arc::new(RwLock::new(SharedState::new(69)));
     let listener = TcpListener::bind("localhost:8080").await.expect("failed to bind to port");
     println!("WebSocket server is now open at port 8080");
 
