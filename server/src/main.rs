@@ -1,5 +1,5 @@
-use std::{io::Error, sync::{Arc, Mutex}};
-use tokio::{net::TcpListener, sync::mpsc};
+use std::{io::Error, sync::{Arc}};
+use tokio::{net::TcpListener, sync::{Mutex, mpsc}};
 use tokio_tungstenite::{accept_async, tungstenite::Message};
 use futures_util::{SinkExt, stream::StreamExt};
 
@@ -31,7 +31,7 @@ async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<Mutex<Share
     let (action_sdr, action_rcr) = mpsc::channel::<ClientMessage>(32);
     let (message_sdr, mut message_rcr) = mpsc::channel::<ServerMessage>(32);
 
-    let player_id = state.lock().expect("poisoned lock").register_player(action_sdr, message_sdr);
+    let player_id = state.lock().await.register_player(action_sdr, message_sdr);
     let mut player_status = PlayerStatus::Idle { action_rcr };
 
     loop {
@@ -45,8 +45,8 @@ async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<Mutex<Share
                             ClientMessage::CreateLobby => {
                                 if let PlayerStatus::Idle { action_rcr } = player_status {
                                     let (cmd_sdr, cmd_rcr) = mpsc::channel::<LobbyCommand>(32);
-                                    let host_player = state.lock().expect("poisoned lock").de_idle_player_by_id(player_id.clone()).unwrap();
-                                    let code = state.lock().expect("poisoned lock").register_lobby(cmd_sdr);
+                                    let host_player = state.lock().await.de_idle_player_by_id(player_id.clone()).unwrap();
+                                    let code = state.lock().await.register_lobby(cmd_sdr);
                                     tokio::spawn(lobby_manager_task(cmd_rcr, host_player, action_rcr, code.clone()));
                                     Some(PlayerStatus::Lobby { code })
                                 } else {
@@ -55,9 +55,9 @@ async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<Mutex<Share
                             },
                             ClientMessage::JoinLobby { code } => {
                                 if let PlayerStatus::Idle { action_rcr } = player_status {
-                                    let mut state = state.lock().expect("poisoned lock");
-                                    let (code, handle) = state.get_lobby(code).unwrap();
-                                    let (player_id, conn) = state.de_idle_player_by_id(player_id.clone()).unwrap();
+                                    let (player_id, conn) = state.lock().await.de_idle_player_by_id(player_id.clone()).unwrap();
+                                    let state_handle = state.lock().await;
+                                    let (code, handle) = state_handle.get_lobby(code).unwrap();
                                     handle.send(LobbyCommand::AddPlayer { id: player_id, player_connection: conn, action_rcr }).await.unwrap();
                                     Some(PlayerStatus::Lobby { code })
                                 } else {
