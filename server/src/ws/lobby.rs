@@ -62,9 +62,10 @@ impl Lobby {
     pub async fn broadcast_state(&mut self) {
         let players_list: Vec<PlayerId> = self.players.keys().cloned().collect();
         self.broadcast_message(ServerMessage::LobbyState {
-                players: players_list.clone(), 
-                host_id: self.host_id.clone(), 
-                status: self.status.clone()
+            code: self.code.clone(),
+            players: players_list.clone(), 
+            host_id: self.host_id.clone(), 
+            status: self.status.clone()
         }).await;
     }
 

@@ -86,7 +86,7 @@ async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<Mutex<Share
                 let Some(msg) = server_msg else { panic!() };
                 let Ok(response) = serde_json::to_string(&msg) else { panic!() };
                 tx.send(Message::Text(response.into())).await;
-                None
+                Some(player_status)
             }
         };
         player_status = result.unwrap();

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::{Receiver, Sender};
-use crate::ws::PlayerId;
+use crate::ws::{PlayerId, lobby::LobbyCode};
 use super::lobby::LobbyStatus;
 
 #[derive(Debug)]
@@ -24,7 +24,7 @@ pub enum LobbyCommand {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum ServerMessage {
-    LobbyState { players: Vec<PlayerId>, host_id: PlayerId, status: LobbyStatus },
+    LobbyState { code: LobbyCode, players: Vec<PlayerId>, host_id: PlayerId, status: LobbyStatus },
     GameStarted,
     Error(String)
 }
