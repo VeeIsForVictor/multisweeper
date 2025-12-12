@@ -7,6 +7,7 @@ use crate::ws::{lobby::{Lobby, LobbyCode, LobbyStatus}, protocol::{ClientMessage
 
 mod lobby;
 pub mod protocol;
+pub mod player;
 
 pub type PlayerId = String;
 
@@ -57,16 +58,16 @@ impl SharedState {
 }
 
 #[tracing::instrument]
-pub async fn lobby_manager_task(mut cmd_rcr: Receiver<LobbyCommand>, host_player: (PlayerId, PlayerConnection), code: String) {
+pub async fn lobby_manager_task(mut cmd_rcr: Receiver<LobbyCommand>, host_player: (PlayerId, PlayerConnection), action_rcr: Receiver<ClientMessage>, code: String) {
     let (host_id, connection) = host_player;
     
-    let mut lobby = Lobby::new(host_id, connection, code);
+    let mut lobby = Lobby::new(host_id, connection, action_rcr, code);
     lobby.broadcast_state().await;
 
     while let Some(cmd) = cmd_rcr.recv().await {
         match cmd {
-            LobbyCommand::AddPlayer { id, player_connection } => {
-                lobby.register_player(id, player_connection);
+            LobbyCommand::AddPlayer { id, player_connection, action_rcr } => {
+                lobby.register_player(id, player_connection, action_rcr);
             },
             LobbyCommand::RemovePlayer(id) => {
                 lobby.deregister_player(id);

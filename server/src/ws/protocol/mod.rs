@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::{Receiver, Sender};
 use crate::ws::PlayerId;
 use super::lobby::LobbyStatus;
 
@@ -17,7 +17,7 @@ pub enum ClientMessage {
 }
 
 pub enum LobbyCommand {
-    AddPlayer { id: PlayerId, player_connection: PlayerConnection },
+    AddPlayer { id: PlayerId, player_connection: PlayerConnection, action_rcr: Receiver<ClientMessage> },
     RemovePlayer(PlayerId),
     StartGame
 }

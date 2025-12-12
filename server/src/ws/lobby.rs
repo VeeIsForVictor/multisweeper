@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Receiver;
-use tracing::warn;
+use tokio_stream::{StreamMap, wrappers::ReceiverStream};
 
-use crate::ws::{PlayerId, protocol::{LobbyCommand, PlayerConnection, ServerMessage}};
+use crate::ws::{PlayerId, player, protocol::{ClientMessage, PlayerConnection, ServerMessage}};
 
 pub type LobbyCode = String;
 
@@ -16,34 +16,43 @@ pub enum LobbyStatus {
 pub struct Lobby {
     code: LobbyCode,
     players: HashMap<PlayerId, PlayerConnection>,
+    player_streams: StreamMap<PlayerId, ReceiverStream<ClientMessage>>,
     host_id: PlayerId,
     pub status: LobbyStatus,
 }
 
 impl Lobby {
-    pub fn new(host_id: PlayerId, host_connection: PlayerConnection, code: LobbyCode) -> Self {
+    pub fn new(host_id: PlayerId, host_connection: PlayerConnection, action_rcr: Receiver<ClientMessage>, code: LobbyCode) -> Self {
         let mut lobby = Lobby {
             code,
             players: HashMap::new(),
+            player_streams: StreamMap::new(),
             host_id: host_id.clone(),
             status: LobbyStatus::Waiting
         };
 
-        lobby.players.insert(host_id, host_connection);
+        lobby.players.insert(host_id.clone(), host_connection);
+        lobby.player_streams.insert(host_id, ReceiverStream::from(action_rcr));
 
         return lobby;
     }
 
-    pub fn register_player(&mut self, player_id: PlayerId, player_connection: PlayerConnection) -> PlayerId {
+    pub fn register_player(&mut self, player_id: PlayerId, player_connection: PlayerConnection, action_rcr: Receiver<ClientMessage>) -> PlayerId {
         self.players.insert(player_id.clone(), player_connection);
+        self.player_streams.insert(player_id.clone(), ReceiverStream::from(action_rcr));
         return player_id;
     }
 
-    pub fn deregister_player(&mut self, player_id: PlayerId) -> Option<(PlayerId, PlayerConnection)> {
-        match self.players.remove(&player_id) {
-            Some(conn) => Some((player_id, conn)),
-            None => None
-        }
+    pub fn deregister_player(&mut self, player_id: PlayerId) -> Option<(PlayerId, PlayerConnection, Receiver<ClientMessage>)> {
+        let conn = match self.players.remove(&player_id) {
+            Some(conn) => conn,
+            None => return None
+        };
+        let action_rcr = match self.player_streams.remove(&player_id) {
+            Some(rcr) => rcr,
+            None => return None
+        };
+        return Some((player_id, conn, action_rcr.into_inner()));
     }
 
     pub fn start_game(&mut self) {
