@@ -1,11 +1,11 @@
-use std::sync::Arc;
-use tokio::{net::TcpListener, sync::{RwLock, mpsc}};
+use std::{io::Error, sync::{Arc, Mutex}};
+use tokio::{net::TcpListener, sync::mpsc};
 use tokio_tungstenite::{accept_async, tungstenite::Message};
 use futures_util::{SinkExt, stream::StreamExt};
 
 use tracing::warn;
 use ws::{protocol::{ClientMessage, ServerMessage}, SharedState};
-use crate::ws::{lobby_manager_task, protocol::{LobbyCommand, PlayerConnection}};
+use crate::ws::{lobby_manager_task, protocol::LobbyCommand};
 
 mod game;
 mod cli_local;
@@ -15,7 +15,7 @@ mod ws;
 #[tracing::instrument]
 async fn main() {
     tracing_forest::init();
-    let state = Arc::new(RwLock::new(SharedState::new(69)));
+    let state = Arc::new(Mutex::new(SharedState::new(69)));
     let listener = TcpListener::bind("localhost:8080").await.expect("failed to bind to port");
     println!("WebSocket server is now open at port 8080");
 
@@ -24,17 +24,17 @@ async fn main() {
     }
 }
 
-async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<RwLock<SharedState>>) {
+async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<Mutex<SharedState>>) {
     let ws_stream = accept_async(stream).await.expect("failed to wrap websocket stream");
     let (mut tx, mut rx) = ws_stream.split();
 
     let (action_sdr, action_rcr) = mpsc::channel::<ClientMessage>(32);
     let (message_sdr, mut message_rcr) = mpsc::channel::<ServerMessage>(32);
 
-    let player_id = state.write().await.register_player(action_sdr, message_sdr);
+    let player_id = state.lock().expect("poisoned lock").register_player(action_sdr, message_sdr);
 
     loop {
-        let result = tokio::select! {
+        let result: Result<(), Error> = tokio::select! {
             ws_msg = rx.next() => {
                 let Some(Ok(msg)) = ws_msg else {panic!()};
                 let bytes = msg.into_data();
@@ -43,14 +43,14 @@ async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<RwLock<Shar
                         match client_msg {
                             ClientMessage::CreateLobby => {
                                 let (cmd_sdr, cmd_rcr) = mpsc::channel::<LobbyCommand>(32);
-                                let host_player = state.write().await.de_idle_player_by_id(player_id.clone()).unwrap();
-                                let code = state.write().await.register_lobby(cmd_sdr);
+                                let host_player = state.lock().expect("poisoned lock").de_idle_player_by_id(player_id.clone()).unwrap();
+                                let code = state.lock().expect("poisoned lock").register_lobby(cmd_sdr);
                                 tokio::spawn(lobby_manager_task(cmd_rcr, host_player, code));
                             },
                             ClientMessage::JoinLobby { code } => {
-                                let state_read = state.read().await;
-                                let (code, handle) = state_read.get_lobby(code).unwrap();
-                                let (player_id, conn) = state.write().await.de_idle_player_by_id(player_id.clone()).unwrap();
+                                let mut state = state.lock().expect("poisoned lock");
+                                let (code, handle) = state.get_lobby(code).unwrap();
+                                let (player_id, conn) = state.de_idle_player_by_id(player_id.clone()).unwrap();
                                 handle.send(LobbyCommand::AddPlayer { id: player_id, player_connection: conn }).await.unwrap();
                             }
                             _ => {
@@ -68,12 +68,14 @@ async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<RwLock<Shar
                         tx.close().await.expect("failed to close connection properly");
                     }
                 }
+                Ok(())
             },
     
             server_msg = message_rcr.recv() => {
                 let Some(msg) = server_msg else { panic!() };
                 let Ok(response) = serde_json::to_string(&msg) else { panic!() };
                 tx.send(Message::Text(response.into())).await;
+                Ok(())
             }
         };
     }
