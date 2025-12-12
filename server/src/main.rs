@@ -28,8 +28,8 @@ async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<RwLock<Shar
     let ws_stream = accept_async(stream).await.expect("failed to wrap websocket stream");
     let (mut tx, mut rx) = ws_stream.split();
 
-    let (mut action_sdr, mut action_rcr) = mpsc::channel::<ClientMessage>(32);
-    let (mut message_sdr, mut message_rcr) = mpsc::channel::<ServerMessage>(32);
+    let (action_sdr, action_rcr) = mpsc::channel::<ClientMessage>(32);
+    let (message_sdr, mut message_rcr) = mpsc::channel::<ServerMessage>(32);
 
     let player_id = state.write().await.register_player(action_sdr, message_sdr);
 
