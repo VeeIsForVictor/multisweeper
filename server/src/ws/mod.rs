@@ -64,44 +64,46 @@ pub async fn lobby_manager_task(mut cmd_rcr: Receiver<LobbyCommand>, host_player
     let mut lobby = Lobby::new(host_id, connection, action_rcr, code);
     lobby.broadcast_state().await;
 
-    tokio::select! {
-        cmd = cmd_rcr.recv() => {
-            let Some(cmd) = cmd else {
-                panic!("lobby's command sender dropped!")
-            };
+    loop {
+        tokio::select! {
+            cmd = cmd_rcr.recv() => {
+                let Some(cmd) = cmd else {
+                    panic!("lobby's command sender dropped!")
+                };
 
-            match cmd {
-                LobbyCommand::AddPlayer { id, player_connection, action_rcr } => {
-                    lobby.register_player(id, player_connection, action_rcr);
-                },
-                LobbyCommand::RemovePlayer(id) => {
-                    lobby.deregister_player(id);
-                    // TODO: handle returning player to idle
-                }
-            }
-        },
-
-        act = lobby.next_client_message() => {
-            let Some((id, act)) = act else {
-                panic!("lobby's player streams dropped!")
-            };
-
-            match act {
-                ClientMessage::StartGame => {
-                    if (id == lobby.host_id) {
-                        lobby.start_game();
+                match cmd {
+                    LobbyCommand::AddPlayer { id, player_connection, action_rcr } => {
+                        lobby.register_player(id, player_connection, action_rcr);
+                    },
+                    LobbyCommand::RemovePlayer(id) => {
+                        lobby.deregister_player(id);
+                        // TODO: handle returning player to idle
                     }
-                },
-                _ => {
-                    panic!("Invalid client message passed")
+                }
+            },
+
+            act = lobby.next_client_message() => {
+                let Some((id, act)) = act else {
+                    panic!("lobby's player streams dropped!")
+                };
+
+                match act {
+                    ClientMessage::StartGame => {
+                        if (id == lobby.host_id) {
+                            lobby.start_game();
+                        }
+                    },
+                    _ => {
+                        panic!("Invalid client message passed")
+                    }
                 }
             }
         }
-    }
-
-    lobby.broadcast_state().await;
-
-    if let LobbyStatus::Starting = lobby.status {
-        lobby.broadcast_message(ServerMessage::GameStarted).await;
+        
+        lobby.broadcast_state().await;
+        
+        if let LobbyStatus::Starting = lobby.status {
+            lobby.broadcast_message(ServerMessage::GameStarted).await;
+        }
     }
 }
