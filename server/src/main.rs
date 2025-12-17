@@ -31,7 +31,7 @@ async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<Mutex<Share
     let (action_sdr, action_rcr) = mpsc::channel::<ClientMessage>(32);
     let (message_sdr, mut message_rcr) = mpsc::channel::<ServerMessage>(32);
 
-    let player_id = state.lock().await.register_player(action_sdr, message_sdr);
+    let player_id = state.lock().await.register_player(action_sdr.clone(), message_sdr);
     let mut player_status = PlayerStatus::Idle { action_rcr };
 
     loop {
@@ -62,6 +62,14 @@ async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<Mutex<Share
                                     Some(PlayerStatus::Lobby { code })
                                 } else {
                                     panic!("illegal operation!");
+                                }
+                            },
+                            ClientMessage::StartGame => {
+                                if let PlayerStatus::Lobby { code } = player_status {
+                                    action_sdr.send(ClientMessage::StartGame).await;
+                                    Some(PlayerStatus::Game)
+                                } else {
+                                    panic!("illegal operation!")
                                 }
                             }
                             _ => {
