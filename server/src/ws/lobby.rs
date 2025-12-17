@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Receiver;
 use tokio_stream::{StreamMap, wrappers::ReceiverStream};
@@ -17,7 +18,7 @@ pub struct Lobby {
     code: LobbyCode,
     players: HashMap<PlayerId, PlayerConnection>,
     player_streams: StreamMap<PlayerId, ReceiverStream<ClientMessage>>,
-    host_id: PlayerId,
+    pub host_id: PlayerId,
     pub status: LobbyStatus,
 }
 
@@ -73,5 +74,13 @@ impl Lobby {
         for player in self.players.values() {
             player.message_sdr.send(msg.clone()).await;
         }
+    }
+
+    pub async fn next_client_message(&mut self) -> Option<(PlayerId, ClientMessage)> {
+        return self.player_streams.next().await;
+    }
+
+    pub fn get_host_id(&self) -> PlayerId {
+        return self.host_id.clone();
     }
 }
