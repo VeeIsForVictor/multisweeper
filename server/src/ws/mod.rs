@@ -72,10 +72,7 @@ pub async fn lobby_manager_task(mut cmd_rcr: Receiver<LobbyCommand>, host_player
             LobbyCommand::RemovePlayer(id) => {
                 lobby.deregister_player(id);
                 // TODO: handle returning player to idle
-            },
-            LobbyCommand::StartGame => {
-                lobby.start_game();
-            },
+            }
         }
         lobby.broadcast_state().await;
 

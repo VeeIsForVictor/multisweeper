@@ -18,8 +18,7 @@ pub enum ClientMessage {
 
 pub enum LobbyCommand {
     AddPlayer { id: PlayerId, player_connection: PlayerConnection, action_rcr: Receiver<ClientMessage> },
-    RemovePlayer(PlayerId),
-    StartGame
+    RemovePlayer(PlayerId)
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
