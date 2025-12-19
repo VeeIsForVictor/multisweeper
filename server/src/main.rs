@@ -3,7 +3,7 @@ use tokio::{net::TcpListener, sync::{Mutex, mpsc}};
 use tokio_tungstenite::{accept_async, tungstenite::Message};
 use futures_util::{SinkExt, stream::StreamExt};
 
-use tracing::warn;
+use tracing::{debug, info, warn};
 use ws::{protocol::{ClientMessage, ServerMessage}, SharedState};
 use crate::ws::{lobby_manager_task, player::PlayerStatus, protocol::LobbyCommand};
 
@@ -24,6 +24,7 @@ async fn main() {
     }
 }
 
+#[tracing::instrument]
 async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<Mutex<SharedState>>) {
     let ws_stream = accept_async(stream).await.expect("failed to wrap websocket stream");
     let (mut tx, mut rx) = ws_stream.split();
@@ -37,7 +38,11 @@ async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<Mutex<Share
     loop {
         let result: Option<PlayerStatus> = tokio::select! {
             ws_msg = rx.next() => {
-                let Some(Ok(msg)) = ws_msg else {panic!()};
+                let Some(Ok(msg)) = ws_msg else {
+                    // websocket closed
+                    info!("Client {player_id} disconnected");
+                    break;
+                };
                 let bytes = msg.into_data();
                 match serde_json::from_slice::<ClientMessage>(&bytes) {
                     Ok(client_msg) => {
@@ -91,7 +96,10 @@ async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<Mutex<Share
             },
     
             server_msg = message_rcr.recv() => {
-                let Some(msg) = server_msg else { panic!() };
+                let Some(msg) = server_msg else {
+                    debug!("Message channel closed for {player_id}");
+                    break;
+                };
                 let Ok(response) = serde_json::to_string(&msg) else { panic!() };
                 tx.send(Message::Text(response.into())).await;
                 Some(player_status)

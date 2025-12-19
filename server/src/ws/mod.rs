@@ -11,6 +11,7 @@ pub mod player;
 
 pub type PlayerId = String;
 
+#[derive(Debug)]
 pub struct SharedState {
     lobbies: HashMap<LobbyCode, mpsc::Sender<LobbyCommand>>,
     idle_players: HashMap<PlayerId, PlayerConnection>,
