@@ -11,9 +11,25 @@ pub struct PlayerConnection {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ClientMessage {
+    IdleClient (IdleAction),
+    LobbyClient (LobbyAction),
+    GameClient (GameAction)
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub enum IdleAction {
     CreateLobby,
-    JoinLobby { code: String },
+    JoinLobby { code: LobbyCode }
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub enum LobbyAction {
     StartGame
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub enum GameAction {
+
 }
 
 pub enum LobbyCommand {
