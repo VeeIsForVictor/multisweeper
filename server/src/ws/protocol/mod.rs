@@ -32,6 +32,15 @@ pub enum GameAction {
 
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum ErrorCode {
+    DeserializationFailed,
+    InvalidStateTransition,
+    LobbyNotFound,
+    NotHost,
+    PlayerNotFound,
+}
+
 pub enum LobbyCommand {
     AddPlayer { id: PlayerId, player_connection: PlayerConnection, action_rcr: Receiver<ClientMessage> },
     RemovePlayer(PlayerId)
@@ -41,5 +50,5 @@ pub enum LobbyCommand {
 pub enum ServerMessage {
     LobbyState { code: LobbyCode, players: Vec<PlayerId>, host_id: PlayerId, status: LobbyStatus },
     GameStarted,
-    Error(String)
+    Error { code: ErrorCode, message: String }
 }

@@ -3,7 +3,7 @@ use rand::{Rng, SeedableRng};
 use rand_pcg::Pcg64;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
-use crate::ws::{lobby::{Lobby, LobbyCode, LobbyStatus}, protocol::{ClientMessage, LobbyCommand, PlayerConnection, ServerMessage}};
+use crate::ws::{lobby::{Lobby, LobbyCode, LobbyStatus}, protocol::{ClientMessage, LobbyAction, LobbyCommand, PlayerConnection, ServerMessage}};
 
 mod lobby;
 pub mod protocol;
@@ -89,7 +89,7 @@ pub async fn lobby_manager_task(mut cmd_rcr: Receiver<LobbyCommand>, host_player
                 };
 
                 match act {
-                    ClientMessage::StartGame => {
+                    ClientMessage::LobbyClient(LobbyAction::StartGame) => {
                         if (id == lobby.host_id) {
                             lobby.start_game();
                         }

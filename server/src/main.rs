@@ -1,11 +1,11 @@
-use std::{io::Error, sync::{Arc}};
+use std::{sync::{Arc}};
 use tokio::{net::TcpListener, sync::{Mutex, mpsc}};
 use tokio_tungstenite::{accept_async, tungstenite::Message};
 use futures_util::{SinkExt, stream::StreamExt};
 
 use tracing::{debug, info, warn};
-use ws::{protocol::{ClientMessage, ServerMessage}, SharedState};
-use crate::ws::{lobby_manager_task, player::PlayerStatus, protocol::LobbyCommand};
+use ws::{protocol::{ClientMessage, ServerMessage, ErrorCode}, SharedState};
+use crate::ws::{lobby_manager_task, player::PlayerStatus, protocol::{IdleAction, LobbyAction, LobbyCommand}};
 
 mod game;
 mod cli_local;
@@ -47,7 +47,7 @@ async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<Mutex<Share
                 match serde_json::from_slice::<ClientMessage>(&bytes) {
                     Ok(client_msg) => {
                         match client_msg {
-                            ClientMessage::CreateLobby => {
+                            ClientMessage::IdleClient(IdleAction::CreateLobby) => {
                                 if let PlayerStatus::Idle { action_rcr } = player_status {
                                     let (cmd_sdr, cmd_rcr) = mpsc::channel::<LobbyCommand>(32);
                                     let host_player = state.lock().await.de_idle_player_by_id(player_id.clone()).unwrap();
@@ -58,7 +58,7 @@ async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<Mutex<Share
                                     panic!("illegal operation!");
                                 }
                             },
-                            ClientMessage::JoinLobby { code } => {
+                            ClientMessage::IdleClient(IdleAction::JoinLobby { code }) => {
                                 if let PlayerStatus::Idle { action_rcr } = player_status {
                                     let (player_id, conn) = state.lock().await.de_idle_player_by_id(player_id.clone()).unwrap();
                                     let state_handle = state.lock().await;
@@ -69,9 +69,9 @@ async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<Mutex<Share
                                     panic!("illegal operation!");
                                 }
                             },
-                            ClientMessage::StartGame => {
-                                if let PlayerStatus::Lobby { code } = player_status {
-                                    action_sdr.send(ClientMessage::StartGame).await;
+                            ClientMessage::LobbyClient(LobbyAction::StartGame) => {
+                                if let PlayerStatus::Lobby { code: _ } = player_status {
+                                    action_sdr.send(client_msg).await;
                                     Some(PlayerStatus::Game)
                                 } else {
                                     panic!("illegal operation!")
@@ -84,13 +84,15 @@ async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<Mutex<Share
                     }
                     Err(e) => {
                         eprintln!("failed to deserialize as client message: {}", e);
-                        let server_data = ServerMessage::Error(String::from("failed to deserialize as ClientMessage"));
+                        let server_data = ServerMessage::Error {
+                            code: ErrorCode::DeserializationFailed,
+                            message: "Failed to deserialize message".to_string()
+                        };
                         if let Ok(response_data) = serde_json::to_string(&server_data) {
-                            tx.send(Message::Text(response_data.into())).await.expect("failed to send error response!");
+                            let _ = tx.send(Message::Text(response_data.into())).await;
                         }
-                        // end connection
-                        tx.close().await.expect("failed to close connection properly");
-                        None
+                        let _ = tx.close().await;
+                        break;
                     }
                 }
             },
