@@ -24,7 +24,8 @@ pub enum IdleAction {
 
 #[derive(Deserialize, Serialize, Debug)]
 pub enum LobbyAction {
-    StartGame
+    StartGame,
+    LeaveLobby
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -43,7 +44,7 @@ pub enum ErrorCode {
 
 pub enum LobbyCommand {
     AddPlayer { id: PlayerId, player_connection: PlayerConnection, action_rcr: Receiver<ClientMessage> },
-    RemovePlayer(PlayerId)
+    RemovePlayer { id: PlayerId, return_to_idle: bool }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

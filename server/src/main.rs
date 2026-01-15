@@ -79,6 +79,20 @@ async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<Mutex<Share
                                     send_error(&mut tx, ErrorCode::InvalidStateTransition, "Cannot start game from current state").await;
                                     break;
                                 }
+                            },
+                            ClientMessage::LobbyClient(LobbyAction::LeaveLobby) => {
+                                if let ConnectionState::Lobby(LobbyState { code }) = connection_state {
+                                    let (_new_action_sdr, new_action_rcr) = tokio::sync::mpsc::channel::<ClientMessage>(32);
+                                    let state_guard = state.lock().await;
+                                    if let Some((_, handle)) = state_guard.get_lobby(code.clone()) {
+                                        let _ = handle.send(LobbyCommand::RemovePlayer { id: player_id.clone(), return_to_idle: true }).await;
+                                    }
+                                    drop(state_guard);
+                                    Some(ConnectionState::Idle(IdleState { action_rcr: new_action_rcr }))
+                                } else {
+                                    send_error(&mut tx, ErrorCode::InvalidStateTransition, "Cannot leave lobby from current state").await;
+                                    break;
+                                }
                             }
                             _ => {
                                 todo!();

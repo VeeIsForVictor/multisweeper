@@ -85,6 +85,10 @@ impl SharedState {
             None => None
         }
     }
+
+    pub fn register_idle_player(&mut self, player_id: PlayerId, connection: PlayerConnection) {
+        self.idle_players.insert(player_id, connection);
+    }
 }
 
 #[tracing::instrument]
@@ -113,9 +117,13 @@ pub async fn lobby_manager_task(
                         lobby.register_player(id.clone(), player_connection, action_rcr);
                         state.lock().await.increment_lobby_player_count(&code);
                     },
-                    LobbyCommand::RemovePlayer(id) => {
-                        lobby.deregister_player(&id);
-                        state.lock().await.decrement_lobby_player_count(&code);
+                    LobbyCommand::RemovePlayer { id, return_to_idle } => {
+                        if let Some((player_id, connection, _)) = lobby.deregister_player(&id) {
+                            state.lock().await.decrement_lobby_player_count(&code);
+                            if return_to_idle {
+                                state.lock().await.register_idle_player(player_id, connection);
+                            }
+                        }
                     }
                 }
             },
