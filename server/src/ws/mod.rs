@@ -1,10 +1,13 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 use rand::{Rng, SeedableRng};
 use rand_pcg::Pcg64;
-use tokio::sync::mpsc::{self, Receiver, Sender};
+use tokio::sync::Mutex;
+use tokio::sync::mpsc::{Receiver, Sender};
 
 use tracing::{info, warn};
-use crate::ws::{lobby::{Lobby, LobbyCode, LobbyStatus}, protocol::{ClientMessage, LobbyAction, LobbyCommand, PlayerConnection, ServerMessage}};
+use crate::ws::lobby::{Lobby, LobbyCode, LobbyStatus};
+use crate::ws::protocol::{ClientMessage, LobbyAction, LobbyCommand, PlayerConnection, ServerMessage};
 
 mod lobby;
 pub mod protocol;
@@ -13,8 +16,14 @@ pub mod player;
 pub type PlayerId = String;
 
 #[derive(Debug)]
+pub struct LobbyHandle {
+    pub cmd_sdr: Sender<LobbyCommand>,
+    pub player_count: usize,
+}
+
+#[derive(Debug)]
 pub struct SharedState {
-    lobbies: HashMap<LobbyCode, mpsc::Sender<LobbyCommand>>,
+    lobbies: HashMap<LobbyCode, LobbyHandle>,
     idle_players: HashMap<PlayerId, PlayerConnection>,
     latest_player_id_number: u32,
     rng: Pcg64
@@ -40,14 +49,33 @@ impl SharedState {
 
     pub fn register_lobby(&mut self, cmd_sdr: Sender<LobbyCommand>) -> LobbyCode {
         let lobby_code = self.rng.random_range(1000..=9999).to_string();
-        self.lobbies.insert(lobby_code.clone(), cmd_sdr);
+        self.lobbies.insert(lobby_code.clone(), LobbyHandle {
+            cmd_sdr,
+            player_count: 1,
+        });
         return lobby_code;
     }
 
     pub fn get_lobby(&self, lobby_code: LobbyCode) -> Option<(LobbyCode, &Sender<LobbyCommand>)> {
         match self.lobbies.get(&lobby_code) {
-            Some(handle) => Some((lobby_code, handle)),
+            Some(handle) => Some((lobby_code, &handle.cmd_sdr)),
             None => None
+        }
+    }
+
+    pub fn deregister_lobby(&mut self, lobby_code: &LobbyCode) -> Option<LobbyHandle> {
+        self.lobbies.remove(lobby_code)
+    }
+
+    pub fn increment_lobby_player_count(&mut self, lobby_code: &LobbyCode) {
+        if let Some(handle) = self.lobbies.get_mut(lobby_code) {
+            handle.player_count += 1;
+        }
+    }
+
+    pub fn decrement_lobby_player_count(&mut self, lobby_code: &LobbyCode) {
+        if let Some(handle) = self.lobbies.get_mut(lobby_code) {
+            handle.player_count = handle.player_count.saturating_sub(1);
         }
     }
 
@@ -60,10 +88,16 @@ impl SharedState {
 }
 
 #[tracing::instrument]
-pub async fn lobby_manager_task(mut cmd_rcr: Receiver<LobbyCommand>, host_player: (PlayerId, PlayerConnection), action_rcr: Receiver<ClientMessage>, code: String) {
+pub async fn lobby_manager_task(
+    mut cmd_rcr: Receiver<LobbyCommand>,
+    host_player: (PlayerId, PlayerConnection),
+    action_rcr: Receiver<ClientMessage>,
+    code: String,
+    state: Arc<Mutex<SharedState>>,
+) {
     let (host_id, connection) = host_player;
 
-    let mut lobby = Lobby::new(host_id, connection, action_rcr, code);
+    let mut lobby = Lobby::new(host_id, connection, action_rcr, code.clone());
     lobby.broadcast_state().await;
 
     loop {
@@ -76,10 +110,12 @@ pub async fn lobby_manager_task(mut cmd_rcr: Receiver<LobbyCommand>, host_player
 
                 match cmd {
                     LobbyCommand::AddPlayer { id, player_connection, action_rcr } => {
-                        lobby.register_player(id, player_connection, action_rcr);
+                        lobby.register_player(id.clone(), player_connection, action_rcr);
+                        state.lock().await.increment_lobby_player_count(&code);
                     },
                     LobbyCommand::RemovePlayer(id) => {
-                        lobby.deregister_player(id);
+                        lobby.deregister_player(&id);
+                        state.lock().await.decrement_lobby_player_count(&code);
                     }
                 }
             },
@@ -112,4 +148,12 @@ pub async fn lobby_manager_task(mut cmd_rcr: Receiver<LobbyCommand>, host_player
             lobby.broadcast_message(ServerMessage::GameStarted).await;
         }
     }
+
+    info!("Lobby {} shutting down, notifying players and cleaning up", code);
+    let _ = lobby.broadcast_message(ServerMessage::Error {
+        code: crate::ws::protocol::ErrorCode::LobbyNotFound,
+        message: "Lobby has been closed".to_string()
+    }).await;
+
+    state.lock().await.deregister_lobby(&code);
 }

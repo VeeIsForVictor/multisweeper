@@ -52,7 +52,7 @@ async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<Mutex<Share
                                     let (cmd_sdr, cmd_rcr) = tokio::sync::mpsc::channel::<LobbyCommand>(32);
                                     let host_player = state.lock().await.de_idle_player_by_id(player_id.clone()).unwrap();
                                     let code = state.lock().await.register_lobby(cmd_sdr);
-                                    tokio::spawn(lobby_manager_task(cmd_rcr, host_player, action_rcr, code.clone()));
+                                    tokio::spawn(lobby_manager_task(cmd_rcr, host_player, action_rcr, code.clone(), state.clone()));
                                     Some(ConnectionState::Lobby(LobbyState { code }))
                                 } else {
                                     send_error(&mut tx, ErrorCode::InvalidStateTransition, "Cannot create lobby from current state").await;
