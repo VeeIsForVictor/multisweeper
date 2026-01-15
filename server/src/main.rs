@@ -4,7 +4,7 @@ use tokio::sync::Mutex;
 use tokio_tungstenite::{accept_async, tungstenite::Message};
 use futures_util::{SinkExt, stream::StreamExt};
 
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 use ws::{protocol::{ClientMessage, ServerMessage, ErrorCode}, SharedState};
 use crate::ws::{lobby_manager_task, player::{ConnectionState, IdleState, LobbyState}, protocol::{IdleAction, LobbyAction, LobbyCommand}};
 
@@ -28,112 +28,204 @@ async fn main() {
 #[tracing::instrument]
 async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<Mutex<SharedState>>) {
     let ws_stream = accept_async(stream).await.expect("failed to wrap websocket stream");
-    let (mut tx, mut rx) = ws_stream.split();
+    let (tx, rx) = ws_stream.split();
 
-    let (action_sdr, action_rcr) = tokio::sync::mpsc::channel::<ClientMessage>(32);
-    let (message_sdr, mut message_rcr) = tokio::sync::mpsc::channel::<ServerMessage>(32);
+    let (action_sdr, _) = tokio::sync::mpsc::channel::<ClientMessage>(32);
+    let (message_sdr, message_rcr) = tokio::sync::mpsc::channel::<ServerMessage>(32);
 
     let player_id = state.lock().await.register_player(action_sdr.clone(), message_sdr);
-    let mut connection_state = ConnectionState::Idle(IdleState { action_rcr });
 
-    loop {
-        let result: Option<ConnectionState> = tokio::select! {
-            ws_msg = rx.next() => {
-                let Some(Ok(msg)) = ws_msg else {
-                    info!("Client {player_id} disconnected");
-                    break;
-                };
-                let bytes = msg.into_data();
-                match serde_json::from_slice::<ClientMessage>(&bytes) {
-                    Ok(client_msg) => {
-                        match client_msg {
-                            ClientMessage::IdleClient(IdleAction::CreateLobby) => {
-                                if let ConnectionState::Idle(IdleState { action_rcr }) = connection_state {
-                                    let (cmd_sdr, cmd_rcr) = tokio::sync::mpsc::channel::<LobbyCommand>(32);
-                                    let host_player = state.lock().await.de_idle_player_by_id(player_id.clone()).unwrap();
-                                    let code = state.lock().await.register_lobby(cmd_sdr);
-                                    tokio::spawn(lobby_manager_task(cmd_rcr, host_player, action_rcr, code.clone(), state.clone()));
-                                    Some(ConnectionState::Lobby(LobbyState { code }))
-                                } else {
-                                    send_error(&mut tx, ErrorCode::InvalidStateTransition, "Cannot create lobby from current state").await;
-                                    break;
-                                }
-                            },
-                            ClientMessage::IdleClient(IdleAction::JoinLobby { code }) => {
-                                if let ConnectionState::Idle(IdleState { action_rcr }) = connection_state {
-                                    let (player_id, conn) = state.lock().await.de_idle_player_by_id(player_id.clone()).unwrap();
-                                    let state_handle = state.lock().await;
-                                    let (code, handle) = state_handle.get_lobby(code).unwrap();
-                                    let _ = handle.send(LobbyCommand::AddPlayer { id: player_id, player_connection: conn, action_rcr }).await;
-                                    Some(ConnectionState::Lobby(LobbyState { code }))
-                                } else {
-                                    send_error(&mut tx, ErrorCode::InvalidStateTransition, "Cannot join lobby from current state").await;
-                                    break;
-                                }
-                            },
-                            ClientMessage::LobbyClient(LobbyAction::StartGame) => {
-                                if let ConnectionState::Lobby(LobbyState { code: _ }) = connection_state {
-                                    let _ = action_sdr.send(client_msg).await;
-                                    Some(ConnectionState::Game)
-                                } else {
-                                    send_error(&mut tx, ErrorCode::InvalidStateTransition, "Cannot start game from current state").await;
-                                    break;
-                                }
-                            },
-                            ClientMessage::LobbyClient(LobbyAction::LeaveLobby) => {
-                                if let ConnectionState::Lobby(LobbyState { code }) = connection_state {
-                                    let (_new_action_sdr, new_action_rcr) = tokio::sync::mpsc::channel::<ClientMessage>(32);
-                                    let state_guard = state.lock().await;
-                                    if let Some((_, handle)) = state_guard.get_lobby(code.clone()) {
-                                        let _ = handle.send(LobbyCommand::RemovePlayer { id: player_id.clone(), return_to_idle: true }).await;
-                                    }
-                                    drop(state_guard);
-                                    Some(ConnectionState::Idle(IdleState { action_rcr: new_action_rcr }))
-                                } else {
-                                    send_error(&mut tx, ErrorCode::InvalidStateTransition, "Cannot leave lobby from current state").await;
-                                    break;
-                                }
-                            }
-                            _ => {
-                                todo!();
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("failed to deserialize as client message: {}", e);
-                        let server_data = ServerMessage::Error {
-                            code: ErrorCode::DeserializationFailed,
-                            message: "Failed to deserialize message".to_string()
-                        };
-                        if let Ok(response_data) = serde_json::to_string(&server_data) {
-                            let _ = tx.send(Message::Text(response_data.into())).await;
-                        }
-                        let _ = tx.close().await;
-                        break;
-                    }
-                }
-            },
+    let mut handler = ConnectionHandler::new(
+        player_id,
+        state,
+        tx,
+        action_sdr,
+    );
 
-            server_msg = message_rcr.recv() => {
-                let Some(msg) = server_msg else {
-                    debug!("Message channel closed for {player_id}");
-                    break;
-                };
-                let Ok(response) = serde_json::to_string(&msg) else { panic!() };
-                let _ = tx.send(Message::Text(response.into())).await;
-                Some(connection_state)
-            }
-        };
-        connection_state = result.unwrap();
-    }
+    handler.run(rx, message_rcr).await;
 }
 
-async fn send_error(tx: &mut (impl SinkExt<Message> + Unpin), code: ErrorCode, message: &str) {
-    let server_data = ServerMessage::Error {
-        code,
-        message: message.to_string()
-    };
-    if let Ok(response_data) = serde_json::to_string(&server_data) {
-        let _ = tx.send(Message::Text(response_data.into())).await;
+struct ConnectionHandler {
+    player_id: String,
+    state: Arc<Mutex<SharedState>>,
+    tx: futures_util::stream::SplitSink<tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>, Message>,
+    action_sdr: tokio::sync::mpsc::Sender<ClientMessage>,
+    connection_state: ConnectionState,
+}
+
+impl ConnectionHandler {
+    fn new(
+        player_id: String,
+        state: Arc<Mutex<SharedState>>,
+        tx: futures_util::stream::SplitSink<tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>, Message>,
+        action_sdr: tokio::sync::mpsc::Sender<ClientMessage>,
+    ) -> Self {
+        let action_rcr = tokio::sync::mpsc::channel(32).1;
+        ConnectionHandler {
+            player_id,
+            state,
+            tx,
+            action_sdr,
+            connection_state: ConnectionState::Idle(IdleState { action_rcr }),
+        }
+    }
+
+    async fn run(
+        &mut self,
+        mut rx: futures_util::stream::SplitStream<tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>>,
+        mut message_rcr: tokio::sync::mpsc::Receiver<ServerMessage>,
+    ) {
+        loop {
+            tokio::select! {
+                ws_msg = rx.next() => {
+                    let Some(Ok(msg)) = ws_msg else {
+                        info!("Client {} disconnected", self.player_id);
+                        break;
+                    };
+                    let bytes = msg.into_data();
+                    match serde_json::from_slice::<ClientMessage>(&bytes) {
+                        Ok(client_msg) => {
+                            self.handle_client_message(client_msg).await;
+                        }
+                        Err(e) => {
+                            eprintln!("failed to deserialize as client message: {}", e);
+                            self.send_error(ErrorCode::DeserializationFailed, "Failed to deserialize message").await;
+                            let _ = self.tx.close().await;
+                            break;
+                        }
+                    }
+                }
+
+                server_msg = message_rcr.recv() => {
+                    let Some(msg) = server_msg else {
+                        debug!("Message channel closed for {}", self.player_id);
+                        break;
+                    };
+                    self.forward_server_message(msg).await;
+                }
+            }
+        }
+    }
+
+    async fn handle_client_message(&mut self, msg: ClientMessage) {
+        match msg {
+            ClientMessage::IdleClient(action) => self.handle_idle_action(action).await,
+            ClientMessage::LobbyClient(action) => self.handle_lobby_action(action).await,
+            ClientMessage::GameClient(action) => self.handle_game_action(action).await,
+        }
+    }
+
+    async fn handle_idle_action(&mut self, action: IdleAction) {
+        match action {
+            IdleAction::CreateLobby => {
+                self.handle_create_lobby().await;
+            }
+            IdleAction::JoinLobby { code } => {
+                self.handle_join_lobby(code).await;
+            }
+        }
+    }
+
+    async fn handle_lobby_action(&mut self, action: LobbyAction) {
+        match action {
+            LobbyAction::StartGame => {
+                self.handle_start_game().await;
+            }
+            LobbyAction::LeaveLobby => {
+                self.handle_leave_lobby().await;
+            }
+        }
+    }
+
+    async fn handle_game_action(&mut self, _action: crate::ws::protocol::GameAction) {
+        todo!();
+    }
+
+    async fn handle_create_lobby(&mut self) {
+        let player_id = self.player_id.clone();
+        let mut state = self.state.lock().await;
+        let Some((player_id, connection)) = state.de_idle_player_by_id(player_id) else {
+            drop(state);
+            self.send_error(ErrorCode::InvalidStateTransition, "Cannot create lobby from current state").await;
+            return;
+        };
+
+        let (cmd_sdr, cmd_rcr) = tokio::sync::mpsc::channel::<LobbyCommand>(32);
+        let code = state.register_lobby(cmd_sdr);
+
+        let action_rcr = tokio::sync::mpsc::channel(32).1;
+        self.connection_state = ConnectionState::Lobby(LobbyState { code: code.clone() });
+        drop(state);
+
+        let state = self.state.clone();
+        tokio::spawn(lobby_manager_task(cmd_rcr, (player_id, connection), action_rcr, code, state));
+    }
+
+    async fn handle_join_lobby(&mut self, code: String) {
+        let player_id = self.player_id.clone();
+        let mut state = self.state.lock().await;
+        let Some((player_id, connection)) = state.de_idle_player_by_id(player_id) else {
+            drop(state);
+            self.send_error(ErrorCode::InvalidStateTransition, "Cannot join lobby from current state").await;
+            return;
+        };
+
+        let action_rcr = tokio::sync::mpsc::channel(32).1;
+        if let Some((code, handle)) = state.get_lobby(code) {
+            let _ = handle.send(LobbyCommand::AddPlayer {
+                id: player_id,
+                player_connection: connection,
+                action_rcr,
+            }).await;
+            self.connection_state = ConnectionState::Lobby(LobbyState { code: code.clone() });
+        } else {
+            drop(state);
+            self.send_error(ErrorCode::LobbyNotFound, "Lobby not found").await;
+        }
+    }
+
+    async fn handle_start_game(&mut self) {
+        let ConnectionState::Lobby(LobbyState { code: _ }) = &self.connection_state else {
+            self.send_error(ErrorCode::InvalidStateTransition, "Cannot start game from current state").await;
+            return;
+        };
+
+        let _ = self.action_sdr.send(ClientMessage::LobbyClient(LobbyAction::StartGame)).await;
+        self.connection_state = ConnectionState::Game;
+    }
+
+    async fn handle_leave_lobby(&mut self) {
+        let ConnectionState::Lobby(LobbyState { code }) = &self.connection_state else {
+            self.send_error(ErrorCode::InvalidStateTransition, "Cannot leave lobby from current state").await;
+            return;
+        };
+
+        let (_new_action_sdr, new_action_rcr) = tokio::sync::mpsc::channel::<ClientMessage>(32);
+        let state = self.state.lock().await;
+        if let Some((_, handle)) = state.get_lobby(code.clone()) {
+            let _ = handle.send(LobbyCommand::RemovePlayer {
+                id: self.player_id.clone(),
+                return_to_idle: true,
+            }).await;
+        }
+        drop(state);
+
+        self.connection_state = ConnectionState::Idle(IdleState { action_rcr: new_action_rcr });
+    }
+
+    async fn send_error(&mut self, code: ErrorCode, message: &str) {
+        let server_data = ServerMessage::Error {
+            code,
+            message: message.to_string(),
+        };
+        if let Ok(response_data) = serde_json::to_string(&server_data) {
+            let _ = self.tx.send(Message::Text(response_data.into())).await;
+        }
+    }
+
+    async fn forward_server_message(&mut self, msg: ServerMessage) {
+        if let Ok(response) = serde_json::to_string(&msg) {
+            let _ = self.tx.send(Message::Text(response.into())).await;
+        }
     }
 }
