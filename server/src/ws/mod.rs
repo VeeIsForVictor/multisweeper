@@ -3,6 +3,7 @@ use rand::{Rng, SeedableRng};
 use rand_pcg::Pcg64;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
+use tracing::{info, warn};
 use crate::ws::{lobby::{Lobby, LobbyCode, LobbyStatus}, protocol::{ClientMessage, LobbyAction, LobbyCommand, PlayerConnection, ServerMessage}};
 
 mod lobby;
@@ -61,7 +62,7 @@ impl SharedState {
 #[tracing::instrument]
 pub async fn lobby_manager_task(mut cmd_rcr: Receiver<LobbyCommand>, host_player: (PlayerId, PlayerConnection), action_rcr: Receiver<ClientMessage>, code: String) {
     let (host_id, connection) = host_player;
-    
+
     let mut lobby = Lobby::new(host_id, connection, action_rcr, code);
     lobby.broadcast_state().await;
 
@@ -69,7 +70,8 @@ pub async fn lobby_manager_task(mut cmd_rcr: Receiver<LobbyCommand>, host_player
         tokio::select! {
             cmd = cmd_rcr.recv() => {
                 let Some(cmd) = cmd else {
-                    panic!("lobby's command sender dropped!")
+                    info!("Lobby {} command channel closed, shutting down", lobby.get_code());
+                    break;
                 };
 
                 match cmd {
@@ -78,31 +80,34 @@ pub async fn lobby_manager_task(mut cmd_rcr: Receiver<LobbyCommand>, host_player
                     },
                     LobbyCommand::RemovePlayer(id) => {
                         lobby.deregister_player(id);
-                        // TODO: handle returning player to idle
                     }
                 }
             },
 
             act = lobby.next_client_message() => {
-                let Some((id, act)) = act else {
-                    panic!("lobby's player streams dropped!")
-                };
-
                 match act {
-                    ClientMessage::LobbyClient(LobbyAction::StartGame) => {
-                        if (id == lobby.host_id) {
-                            lobby.start_game();
+                    Some((id, act)) => {
+                        match act {
+                            ClientMessage::LobbyClient(LobbyAction::StartGame) => {
+                                if id == lobby.host_id {
+                                    lobby.start_game();
+                                }
+                            },
+                            _ => {
+                                warn!("Unexpected message type received in lobby: {:?}", act);
+                            }
                         }
                     },
-                    _ => {
-                        panic!("Invalid client message passed")
+                    None => {
+                        info!("Lobby {} all player streams closed, shutting down", lobby.get_code());
+                        break;
                     }
                 }
             }
         }
-        
+
         lobby.broadcast_state().await;
-        
+
         if let LobbyStatus::Starting = lobby.status {
             lobby.broadcast_message(ServerMessage::GameStarted).await;
         }

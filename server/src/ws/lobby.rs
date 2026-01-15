@@ -83,4 +83,8 @@ impl Lobby {
     pub fn get_host_id(&self) -> PlayerId {
         return self.host_id.clone();
     }
+
+    pub fn get_code(&self) -> &LobbyCode {
+        &self.code
+    }
 }
