@@ -120,6 +120,24 @@ impl ConnectionHandler {
                 }
             }
         }
+
+        self.clean_state_on_disconnect().await;
+    }
+
+    async fn clean_state_on_disconnect(& mut self) {
+        match &self.connection_state {
+            ConnectionState::Idle(..) => (),
+            ConnectionState::Lobby (LobbyState { code }) => {
+                match self.state.lock().await.get_lobby(code.clone()) {
+                    None => (),
+                    Some((_code, handle)) => {
+                        handle.send(LobbyCommand::RemovePlayer { id: self.player_id.clone(), return_to_idle: false }).await;
+                    }
+                }
+            }
+            ConnectionState::Game => todo!(),
+            ConnectionState::Disconnected => todo!(),
+        }
     }
 
     async fn handle_client_message(&mut self, msg: ClientMessage) -> Result<(), ConnectionError> {
