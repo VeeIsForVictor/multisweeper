@@ -33,7 +33,7 @@ async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<Mutex<Share
     let ws_stream = accept_async(stream).await.expect("failed to wrap websocket stream");
     let (tx, rx) = ws_stream.split();
 
-    let (action_sdr, _) = tokio::sync::mpsc::channel::<ClientMessage>(32);
+    let (action_sdr, action_rcr) = tokio::sync::mpsc::channel::<ClientMessage>(32);
     let (message_sdr, message_rcr) = tokio::sync::mpsc::channel::<ServerMessage>(32);
 
     let player_id = state.lock().await.register_player(action_sdr.clone(), message_sdr);
@@ -43,6 +43,7 @@ async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<Mutex<Share
         state,
         tx,
         action_sdr,
+        action_rcr,
     );
 
     handler.run(rx, message_rcr).await;
@@ -62,8 +63,8 @@ impl ConnectionHandler {
         state: Arc<Mutex<SharedState>>,
         tx: futures_util::stream::SplitSink<tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>, Message>,
         action_sdr: tokio::sync::mpsc::Sender<ClientMessage>,
+        action_rcr: tokio::sync::mpsc::Receiver<ClientMessage>,
     ) -> Self {
-        let action_rcr = tokio::sync::mpsc::channel(32).1;
         ConnectionHandler {
             player_id,
             state,
@@ -159,8 +160,12 @@ impl ConnectionHandler {
         let (cmd_sdr, cmd_rcr) = tokio::sync::mpsc::channel::<LobbyCommand>(32);
         let code = state.register_lobby(cmd_sdr);
 
-        let action_rcr = tokio::sync::mpsc::channel(32).1;
-        self.connection_state = ConnectionState::Lobby(LobbyState { code: code.clone() });
+        let (action_rcr, new_state) = self.connection_state.into_lobby(code.clone())
+            .ok_or_else(|| ConnectionError::StateTransitionInvalid {
+                from: "Idle".to_string(),
+                action: "CreateLobby".to_string(),
+            })?;
+        self.connection_state = new_state;
         drop(state);
 
         let state = self.state.clone();
@@ -177,14 +182,19 @@ impl ConnectionHandler {
                 action: "JoinLobby".to_string(),
             })?;
 
-        let action_rcr = tokio::sync::mpsc::channel(32).1;
-        if let Some((code, handle)) = state.get_lobby(code) {
+        if let Some((lobby_code, handle)) = state.get_lobby(code.clone()) {
+            let (action_rcr, new_state) = self.connection_state.into_lobby(lobby_code.clone())
+                .ok_or_else(|| ConnectionError::StateTransitionInvalid {
+                    from: "Idle".to_string(),
+                    action: "JoinLobby".to_string(),
+                })?;
+            self.connection_state = new_state;
+
             let _ = handle.send(LobbyCommand::AddPlayer {
                 id: player_id,
                 player_connection: connection,
                 action_rcr,
             }).await;
-            self.connection_state = ConnectionState::Lobby(LobbyState { code: code.clone() });
             Ok(())
         } else {
             Err(ConnectionError::LobbyNotFound)

@@ -47,7 +47,17 @@ impl ConnectionState {
         }
     }
 
-    pub fn into_lobby(self) -> Option<LobbyState> {
+    pub fn into_lobby(&mut self, code: LobbyCode) -> Option<(Receiver<ClientMessage>, ConnectionState)> {
+        match std::mem::replace(self, ConnectionState::Disconnected) {
+            ConnectionState::Idle(IdleState { action_rcr }) => {
+                let new_state = ConnectionState::Lobby(LobbyState { code });
+                Some((action_rcr, new_state))
+            }
+            _ => None,
+        }
+    }
+
+    pub fn into_lobby_state(self) -> Option<LobbyState> {
         match self {
             ConnectionState::Lobby(state) => Some(state),
             _ => None,
