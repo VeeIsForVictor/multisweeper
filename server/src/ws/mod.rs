@@ -7,9 +7,11 @@ use tokio::sync::mpsc::{Receiver, Sender};
 
 use tracing::{info, warn};
 use crate::ws::lobby::{Lobby, LobbyCode, LobbyStatus};
+use crate::ws::lobby_game::LobbyGame;
 use crate::ws::protocol::{ClientMessage, LobbyAction, LobbyCommand, PlayerConnection, ServerMessage};
 
 mod lobby;
+mod lobby_game;
 pub mod protocol;
 pub mod player;
 
@@ -157,6 +159,10 @@ pub async fn lobby_manager_task(
         }
     }
 
+    if let LobbyStatus::Starting = lobby.status {
+        lobby = game_manager_task(lobby).await;
+    }
+
     info!("Lobby {} shutting down, notifying players and cleaning up", code);
     let _ = lobby.broadcast_message(ServerMessage::Error {
         code: crate::ws::protocol::ErrorCode::LobbyNotFound,
@@ -164,4 +170,10 @@ pub async fn lobby_manager_task(
     }).await;
 
     state.lock().await.deregister_lobby(&code);
+}
+
+#[tracing::instrument(skip(lobby))]
+pub async fn game_manager_task(lobby: Lobby) -> Lobby {
+    let game = LobbyGame::new();
+    return lobby;
 }
