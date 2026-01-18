@@ -1,4 +1,6 @@
-#[derive(Debug, thiserror::Error)]
+use crate::ws::protocol::ErrorCode;
+
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum ConnectionError {
     #[error("WebSocket connection was closed")]
     WebSocketClosed,
@@ -19,11 +21,33 @@ pub enum ConnectionError {
     PlayerNotFound,
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum LobbyError {
     #[error("Host disconnected from lobby")]
     HostDisconnected,
 
     #[error("No players remaining in lobby")]
     NoPlayersRemaining,
+}
+
+impl From<ConnectionError> for ErrorCode {
+    fn from(err: ConnectionError) -> Self {
+        match err {
+            ConnectionError::WebSocketClosed => ErrorCode::DeserializationFailed,
+            ConnectionError::MessageDeserializationFailed(_) => ErrorCode::DeserializationFailed,
+            ConnectionError::StateTransitionInvalid { .. } => ErrorCode::InvalidStateTransition,
+            ConnectionError::LobbyNotFound => ErrorCode::LobbyNotFound,
+            ConnectionError::NotHost => ErrorCode::NotHost,
+            ConnectionError::PlayerNotFound => ErrorCode::PlayerNotFound,
+        }
+    }
+}
+
+impl From<LobbyError> for ErrorCode {
+    fn from(err: LobbyError) -> Self {
+        match err {
+            LobbyError::HostDisconnected => ErrorCode::InvalidStateTransition,
+            LobbyError::NoPlayersRemaining => ErrorCode::LobbyNotFound,
+        }
+    }
 }

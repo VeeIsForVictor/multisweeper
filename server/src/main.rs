@@ -5,11 +5,14 @@ use tokio_tungstenite::{accept_async, tungstenite::Message};
 use futures_util::{SinkExt, stream::StreamExt};
 
 use tracing::{debug, info};
-use ws::{protocol::{ClientMessage, ServerMessage, ErrorCode}, SharedState};
+use crate::error::ConnectionError;
+use crate::ws::protocol::{ClientMessage, ServerMessage, ErrorCode};
+use crate::ws::SharedState;
 use crate::ws::{lobby_manager_task, player::{ConnectionState, IdleState, LobbyState}, protocol::{IdleAction, LobbyAction, LobbyCommand}};
 
 mod game;
 mod cli_local;
+mod error;
 mod ws;
 
 #[tokio::main]
@@ -85,7 +88,18 @@ impl ConnectionHandler {
                     let bytes = msg.into_data();
                     match serde_json::from_slice::<ClientMessage>(&bytes) {
                         Ok(client_msg) => {
-                            self.handle_client_message(client_msg).await;
+                            if let Err(e) = self.handle_client_message(client_msg).await {
+                                let code: ErrorCode = e.clone().into();
+                                let message = match &e {
+                                    ConnectionError::StateTransitionInvalid { from, action } => {
+                                        format!("Cannot {} from {}", action, from)
+                                    }
+                                    ConnectionError::LobbyNotFound => "Lobby not found".to_string(),
+                                    ConnectionError::NotHost => "Only the host can perform this action".to_string(),
+                                    _ => "An error occurred".to_string(),
+                                };
+                                self.send_error(code, &message).await;
+                            }
                         }
                         Err(e) => {
                             eprintln!("failed to deserialize as client message: {}", e);
@@ -107,7 +121,7 @@ impl ConnectionHandler {
         }
     }
 
-    async fn handle_client_message(&mut self, msg: ClientMessage) {
+    async fn handle_client_message(&mut self, msg: ClientMessage) -> Result<(), ConnectionError> {
         match msg {
             ClientMessage::IdleClient(action) => self.handle_idle_action(action).await,
             ClientMessage::LobbyClient(action) => self.handle_lobby_action(action).await,
@@ -115,40 +129,32 @@ impl ConnectionHandler {
         }
     }
 
-    async fn handle_idle_action(&mut self, action: IdleAction) {
+    async fn handle_idle_action(&mut self, action: IdleAction) -> Result<(), ConnectionError> {
         match action {
-            IdleAction::CreateLobby => {
-                self.handle_create_lobby().await;
-            }
-            IdleAction::JoinLobby { code } => {
-                self.handle_join_lobby(code).await;
-            }
+            IdleAction::CreateLobby => self.handle_create_lobby().await,
+            IdleAction::JoinLobby { code } => self.handle_join_lobby(code).await,
         }
     }
 
-    async fn handle_lobby_action(&mut self, action: LobbyAction) {
+    async fn handle_lobby_action(&mut self, action: LobbyAction) -> Result<(), ConnectionError> {
         match action {
-            LobbyAction::StartGame => {
-                self.handle_start_game().await;
-            }
-            LobbyAction::LeaveLobby => {
-                self.handle_leave_lobby().await;
-            }
+            LobbyAction::StartGame => self.handle_start_game().await,
+            LobbyAction::LeaveLobby => self.handle_leave_lobby().await,
         }
     }
 
-    async fn handle_game_action(&mut self, _action: crate::ws::protocol::GameAction) {
+    async fn handle_game_action(&mut self, _action: crate::ws::protocol::GameAction) -> Result<(), ConnectionError> {
         todo!();
     }
 
-    async fn handle_create_lobby(&mut self) {
+    async fn handle_create_lobby(&mut self) -> Result<(), ConnectionError> {
         let player_id = self.player_id.clone();
         let mut state = self.state.lock().await;
-        let Some((player_id, connection)) = state.de_idle_player_by_id(player_id) else {
-            drop(state);
-            self.send_error(ErrorCode::InvalidStateTransition, "Cannot create lobby from current state").await;
-            return;
-        };
+        let (player_id, connection) = state.de_idle_player_by_id(player_id)
+            .ok_or_else(|| ConnectionError::StateTransitionInvalid {
+                from: "Idle".to_string(),
+                action: "CreateLobby".to_string(),
+            })?;
 
         let (cmd_sdr, cmd_rcr) = tokio::sync::mpsc::channel::<LobbyCommand>(32);
         let code = state.register_lobby(cmd_sdr);
@@ -159,16 +165,17 @@ impl ConnectionHandler {
 
         let state = self.state.clone();
         tokio::spawn(lobby_manager_task(cmd_rcr, (player_id, connection), action_rcr, code, state));
+        Ok(())
     }
 
-    async fn handle_join_lobby(&mut self, code: String) {
+    async fn handle_join_lobby(&mut self, code: String) -> Result<(), ConnectionError> {
         let player_id = self.player_id.clone();
         let mut state = self.state.lock().await;
-        let Some((player_id, connection)) = state.de_idle_player_by_id(player_id) else {
-            drop(state);
-            self.send_error(ErrorCode::InvalidStateTransition, "Cannot join lobby from current state").await;
-            return;
-        };
+        let (player_id, connection) = state.de_idle_player_by_id(player_id)
+            .ok_or_else(|| ConnectionError::StateTransitionInvalid {
+                from: "Idle".to_string(),
+                action: "JoinLobby".to_string(),
+            })?;
 
         let action_rcr = tokio::sync::mpsc::channel(32).1;
         if let Some((code, handle)) = state.get_lobby(code) {
@@ -178,26 +185,31 @@ impl ConnectionHandler {
                 action_rcr,
             }).await;
             self.connection_state = ConnectionState::Lobby(LobbyState { code: code.clone() });
+            Ok(())
         } else {
-            drop(state);
-            self.send_error(ErrorCode::LobbyNotFound, "Lobby not found").await;
+            Err(ConnectionError::LobbyNotFound)
         }
     }
 
-    async fn handle_start_game(&mut self) {
+    async fn handle_start_game(&mut self) -> Result<(), ConnectionError> {
         let ConnectionState::Lobby(LobbyState { code: _ }) = &self.connection_state else {
-            self.send_error(ErrorCode::InvalidStateTransition, "Cannot start game from current state").await;
-            return;
+            return Err(ConnectionError::StateTransitionInvalid {
+                from: format!("{:?}", self.connection_state),
+                action: "StartGame".to_string(),
+            });
         };
 
         let _ = self.action_sdr.send(ClientMessage::LobbyClient(LobbyAction::StartGame)).await;
         self.connection_state = ConnectionState::Game;
+        Ok(())
     }
 
-    async fn handle_leave_lobby(&mut self) {
+    async fn handle_leave_lobby(&mut self) -> Result<(), ConnectionError> {
         let ConnectionState::Lobby(LobbyState { code }) = &self.connection_state else {
-            self.send_error(ErrorCode::InvalidStateTransition, "Cannot leave lobby from current state").await;
-            return;
+            return Err(ConnectionError::StateTransitionInvalid {
+                from: format!("{:?}", self.connection_state),
+                action: "LeaveLobby".to_string(),
+            });
         };
 
         let (_new_action_sdr, new_action_rcr) = tokio::sync::mpsc::channel::<ClientMessage>(32);
@@ -211,6 +223,7 @@ impl ConnectionHandler {
         drop(state);
 
         self.connection_state = ConnectionState::Idle(IdleState { action_rcr: new_action_rcr });
+        Ok(())
     }
 
     async fn send_error(&mut self, code: ErrorCode, message: &str) {

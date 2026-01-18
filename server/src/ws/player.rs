@@ -2,14 +2,17 @@ use tokio::sync::mpsc::Receiver;
 
 use crate::ws::{lobby::LobbyCode, protocol::ClientMessage};
 
+#[derive(Debug)]
 pub struct IdleState {
     pub action_rcr: Receiver<ClientMessage>,
 }
 
+#[derive(Debug)]
 pub struct LobbyState {
     pub code: LobbyCode,
 }
 
+#[derive(Debug)]
 pub enum ConnectionState {
     Idle(IdleState),
     Lobby(LobbyState),
