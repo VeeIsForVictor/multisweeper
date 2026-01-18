@@ -30,7 +30,8 @@ pub enum LobbyAction {
 
 #[derive(Deserialize, Serialize, Debug)]
 pub enum GameAction {
-
+    RevealTile { x: u8, y: u8 },
+    FlagTile { x: u8, y: u8 }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
