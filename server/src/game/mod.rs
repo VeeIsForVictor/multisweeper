@@ -9,10 +9,10 @@ use error::GameError;
 use crate::game::board::RevealResult;
 
 pub struct GameInfo {
-    width: u8,
-    height: u8,
-    number_of_mines: u8,
-    seed: u64
+    pub width: u8,
+    pub height: u8,
+    pub number_of_mines: u8,
+    pub seed: u64
 }
 
 #[derive(Debug)]
