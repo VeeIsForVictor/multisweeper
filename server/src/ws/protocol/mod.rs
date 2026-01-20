@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::{Receiver, Sender};
-use crate::{game::GamePhase, ws::{PlayerId, lobby::LobbyCode}};
+use crate::{game::{GameAction, GamePhase}, ws::{PlayerId, lobby::LobbyCode}};
 use super::lobby::LobbyStatus;
 
 #[derive(Debug)]
@@ -13,7 +13,7 @@ pub struct PlayerConnection {
 pub enum ClientMessage {
     IdleClient (IdleAction),
     LobbyClient (LobbyAction),
-    GameClient (GameAction)
+    GameClient (PlayerAction)
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -29,26 +29,35 @@ pub enum LobbyAction {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
-pub enum GameAction {
+pub enum PlayerAction {
     RevealTile { x: u8, y: u8 },
     FlagTile { x: u8, y: u8 }
 }
 
+impl Into<crate::game::GameAction> for PlayerAction {
+    fn into(self) -> crate::game::GameAction {
+        match self {
+            PlayerAction::RevealTile { x, y } => crate::game::GameAction::REVEAL { x, y },
+            PlayerAction::FlagTile { x, y } => crate::game::GameAction::FLAG { x, y },
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub enum GameResult {
+pub enum PlayerResult {
     WON,
     LOST,
     PLAYING,
     STALLED,
 }
 
-impl From<GamePhase> for GameResult {
+impl From<GamePhase> for PlayerResult {
     fn from(value: GamePhase) -> Self {
         match value {
-            GamePhase::WON => GameResult::WON,
-            GamePhase::LOST => GameResult::LOST,
-            GamePhase::PLAYING => GameResult::PLAYING,
-            GamePhase::STALLED => GameResult::STALLED,
+            GamePhase::WON => PlayerResult::WON,
+            GamePhase::LOST => PlayerResult::LOST,
+            GamePhase::PLAYING => PlayerResult::PLAYING,
+            GamePhase::STALLED => PlayerResult::STALLED,
         }
     }
 }
@@ -72,7 +81,7 @@ pub enum ServerMessage {
     LobbyState { code: LobbyCode, players: Vec<PlayerId>, host_id: PlayerId, status: LobbyStatus },
     GameStarted,
     GameInfo { code: LobbyCode, x_bound: u8, y_bound: u8, number_of_mines: u8, seed: u64 },
-    GameAction(PlayerId, GameAction),
-    GameResult(PlayerId, GameResult),
+    PlayerAction(PlayerId, PlayerAction),
+    PlayerResult(PlayerId, PlayerResult),
     Error { code: ErrorCode, message: String }
 }
