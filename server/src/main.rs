@@ -29,6 +29,7 @@ async fn main() {
                     .parse_lossy("info,tungstenite=warn")
             )
         ).init();
+    tracing_forest::worker_task().build();
     let state = Arc::new(Mutex::new(SharedState::new(69)));
     let listener = TcpListener::bind("localhost:8080").await.expect("failed to bind to port");
     println!("WebSocket server is now open at port 8080");
@@ -36,7 +37,7 @@ async fn main() {
 
     while let Ok((stream, addr)) = listener.accept().await {
         let conn_id = state.lock().await.new_player_name();
-        tokio::spawn(handle_connection(stream, conn_id.clone(), state.clone()).instrument(tracing::info_span!("tcp", %addr)));
+        tokio::spawn(handle_connection(stream, conn_id.clone(), state.clone()));
     }
 }
 
@@ -86,7 +87,7 @@ impl ConnectionHandler {
             connection_state: ConnectionState::Idle(IdleState { action_rcr }),
         }
     }
-
+    
     async fn run(
         &mut self,
         mut rx: futures_util::stream::SplitStream<tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>>,
