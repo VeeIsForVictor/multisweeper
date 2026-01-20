@@ -14,14 +14,9 @@ pub enum LobbyStatus {
     Starting
 }
 
-pub struct LobbyPlayerData {
-    pub connection: PlayerConnection,
-    pub disconnect_rx: Receiver<()>,
-}
-
 pub struct Lobby {
     code: LobbyCode,
-    players: HashMap<PlayerId, LobbyPlayerData>,
+    players: HashMap<PlayerId, PlayerConnection>,
     player_streams: StreamMap<PlayerId, ReceiverStream<ClientMessage>>,
     pub host_id: PlayerId,
     pub status: LobbyStatus,
@@ -30,8 +25,6 @@ pub struct Lobby {
 
 impl Lobby {
     pub fn new(host_id: PlayerId, host_connection: PlayerConnection, action_rcr: Receiver<ClientMessage>, code: LobbyCode) -> Self {
-        let (disconnect_tx, disconnect_rx) = tokio::sync::mpsc::channel(1);
-
         let mut lobby = Lobby {
             code,
             players: HashMap::new(),
@@ -41,32 +34,19 @@ impl Lobby {
             next_host_id: None,
         };
 
-        lobby.players.insert(host_id.clone(), LobbyPlayerData {
-            connection: host_connection,
-            disconnect_rx,
-        });
+        lobby.players.insert(host_id.clone(), host_connection);
         lobby.player_streams.insert(host_id, ReceiverStream::from(action_rcr));
-
-        let _ = disconnect_tx.send(());
 
         lobby
     }
 
     pub fn register_player(&mut self, player_id: PlayerId, player_connection: PlayerConnection, action_rcr: Receiver<ClientMessage>) -> PlayerId {
-        let (disconnect_tx, disconnect_rx) = tokio::sync::mpsc::channel(1);
-
-        self.players.insert(player_id.clone(), LobbyPlayerData {
-            connection: player_connection,
-            disconnect_rx,
-        });
+        self.players.insert(player_id.clone(), player_connection);
         self.player_streams.insert(player_id.clone(), ReceiverStream::from(action_rcr));
-
-        let _ = disconnect_tx.send(());
-
         player_id
     }
 
-    pub fn deregister_player(&mut self, player_id: &PlayerId) -> Option<(PlayerId, PlayerConnection, Receiver<()>)> {
+    pub fn deregister_player(&mut self, player_id: &PlayerId) -> Option<(PlayerId, PlayerConnection)> {
         let player_data = match self.players.remove(player_id) {
             Some(data) => data,
             None => return None
@@ -77,7 +57,7 @@ impl Lobby {
             self.promote_new_host();
         }
 
-        Some((player_id.clone(), player_data.connection, player_data.disconnect_rx))
+        Some((player_id.clone(), player_data))
     }
 
     fn promote_new_host(&mut self) {
@@ -116,7 +96,7 @@ impl Lobby {
     pub async fn broadcast_message(&mut self, msg: ServerMessage) {
         let mut disconnected = Vec::new();
         for (id, player) in &self.players {
-            if player.connection.message_sdr.send(msg.clone()).await.is_err() {
+            if player.message_sdr.send(msg.clone()).await.is_err() {
                 disconnected.push(id.clone());
             }
         }

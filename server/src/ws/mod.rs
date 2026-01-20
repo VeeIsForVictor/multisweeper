@@ -120,7 +120,7 @@ pub async fn lobby_manager_task(
                         state.lock().await.increment_lobby_player_count(&code);
                     },
                     LobbyCommand::RemovePlayer { id, return_to_idle } => {
-                        if let Some((player_id, connection, _)) = lobby.deregister_player(&id) {
+                        if let Some((player_id, connection)) = lobby.deregister_player(&id) {
                             state.lock().await.decrement_lobby_player_count(&code);
                             if return_to_idle {
                                 state.lock().await.register_idle_player(player_id, connection);
@@ -174,6 +174,6 @@ pub async fn lobby_manager_task(
 
 #[tracing::instrument(skip(lobby))]
 pub async fn game_manager_task(lobby: Lobby) -> Lobby {
-    let game = LobbyGame::new();
+    let game: LobbyGame = lobby.into();
     return lobby;
 }

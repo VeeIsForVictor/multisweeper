@@ -1,15 +1,23 @@
-use crate::game::Game;
+use std::collections::HashMap;
+
+use tokio_stream::{StreamMap, wrappers::ReceiverStream};
+
+use crate::{game::Game, ws::{PlayerId, lobby::{Lobby, LobbyCode}, protocol::{ClientMessage, PlayerConnection}}};
 
 pub struct GameStatus {
-
+    
 }
 
 pub struct LobbyGame {
-
+    code: LobbyCode,
+    players: HashMap<PlayerId, PlayerConnection>,
+    player_streams: StreamMap<PlayerId, ReceiverStream<ClientMessage>>,
+    pub host_id: PlayerId,
+    pub next_host_id: Option<PlayerId>,
 }
 
-impl LobbyGame {
-    pub fn new() {
+impl From<Lobby> for LobbyGame {
+    fn from(value: Lobby) -> Self {
         
     }
 }
