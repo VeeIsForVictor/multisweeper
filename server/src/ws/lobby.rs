@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Receiver;
 use tokio_stream::{StreamMap, wrappers::ReceiverStream};
 
-use crate::ws::{PlayerId, protocol::{ClientMessage, PlayerConnection, ServerMessage}};
+use crate::{error::{GameError, LobbyError}, game::Game, ws::{PlayerId, protocol::{ClientMessage, PlayerConnection, ServerMessage}}};
 
 pub type LobbyCode = String;
 
@@ -107,6 +107,30 @@ impl Lobby {
 
     pub async fn next_client_message(&mut self) -> Option<(PlayerId, ClientMessage)> {
         self.player_streams.next().await
+    }
+
+    pub async fn next_player_message(&mut self, target_player: PlayerId) -> Option<(ClientMessage)> {
+        loop {
+            let next_action = self.next_client_message().await;
+            match next_action {
+                Some((player_id, action)) => {
+                    if (player_id == target_player) { return Some(action) }
+                    else { continue; }
+                }
+                None => return None,
+            }
+        }
+    }
+
+    async fn send_player_error(&mut self, target_player: PlayerId, error: GameError) {
+        match &self.players.get(&target_player) {
+            Some(connection) => {
+                connection.message_sdr.send(
+                    ServerMessage::Error { code: error.into() , message: String::from("An error occurred during your action") }
+                ).await;
+            },
+            None => (),
+        }
     }
 
     pub fn handle_disconnect(&mut self, player_id: &PlayerId) {

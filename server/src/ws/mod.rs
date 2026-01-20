@@ -11,7 +11,7 @@ use tracing::{info, warn};
 use crate::game::Game;
 use crate::ws::lobby::{Lobby, LobbyCode, LobbyStatus};
 use crate::ws::lobby_game::LobbyGame;
-use crate::ws::protocol::{ClientMessage, LobbyAction, LobbyCommand, PlayerConnection, ServerMessage};
+use crate::ws::protocol::{ClientMessage, LobbyAction, LobbyCommand, PlayerConnection, PlayerResult, ServerMessage};
 
 mod lobby;
 mod lobby_game;
@@ -161,7 +161,7 @@ pub async fn lobby_manager_task(
 
 #[tracing::instrument(skip(lobby))]
 pub async fn game_manager_task(mut lobby: Lobby) -> Lobby {
-    let game = Game::new(
+    let mut game = Game::new(
         crate::game::GameDifficulty::TEST,
         1234
     );
@@ -177,16 +177,30 @@ pub async fn game_manager_task(mut lobby: Lobby) -> Lobby {
         seed: game_info.seed
     }).await;
 
-    while let Some(player) = player_order.pop_front() {
+    while let Some(current_player) = player_order.pop_front() {
         let timer = sleep(Duration::from_secs(30));
 
-        tokio::select! {
-            _timeout = timer => {
-                
-            }
+        loop {
+            let result: PlayerResult = tokio::select! {
+                action = lobby.next_client_message() => {
+                    match action {
+                        Some((player_id, message)) => {
+                            if player_id != current_player {
+                                PlayerResult::STALLED
+                            } else {
+                                PlayerResult::WON
+                            }
+                        },
+                        None => todo!(),
+                    }
+                },
+                _timeout = timer => {
+                    PlayerResult::LOST
+                },
+            };
         }
 
-        player_order.push_back(player);
+        player_order.push_back(current_player);
     }
     
     return lobby;

@@ -30,6 +30,15 @@ pub enum LobbyError {
     NoPlayersRemaining,
 }
 
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum GameError {
+    #[error("Not your turn")]
+    NotYourTurn,
+
+    #[error("Game logic error")]
+    GameLogicError
+}
+
 impl From<ConnectionError> for ErrorCode {
     fn from(err: ConnectionError) -> Self {
         match err {
@@ -48,6 +57,15 @@ impl From<LobbyError> for ErrorCode {
         match err {
             LobbyError::HostDisconnected => ErrorCode::InvalidStateTransition,
             LobbyError::NoPlayersRemaining => ErrorCode::LobbyNotFound,
+        }
+    }
+}
+
+impl From<GameError> for ErrorCode {
+    fn from(err: GameError) -> Self {
+        match err {
+            GameError::NotYourTurn => ErrorCode::NotYourTurn,
+            GameError::GameLogicError => ErrorCode::GameLogicError,
         }
     }
 }

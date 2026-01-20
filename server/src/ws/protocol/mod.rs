@@ -69,6 +69,8 @@ pub enum ErrorCode {
     LobbyNotFound,
     NotHost,
     PlayerNotFound,
+    NotYourTurn,
+    GameLogicError
 }
 
 pub enum LobbyCommand {
@@ -80,7 +82,7 @@ pub enum LobbyCommand {
 pub enum ServerMessage {
     LobbyState { code: LobbyCode, players: Vec<PlayerId>, host_id: PlayerId, status: LobbyStatus },
     GameStarted,
-    GameInfo { code: LobbyCode, x_bound: u8, y_bound: u8, number_of_mines: u8, seed: u64 },
+    GameInfo { code: LobbyCode, width: u8, height: u8, number_of_mines: u8, seed: u64 },
     PlayerTurn(PlayerId),
     PlayerAction(PlayerId, PlayerAction),
     PlayerResult(PlayerId, PlayerResult),
