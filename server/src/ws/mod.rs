@@ -19,8 +19,7 @@ pub type PlayerId = String;
 
 #[derive(Debug)]
 pub struct LobbyHandle {
-    pub cmd_sdr: Sender<LobbyCommand>,
-    pub player_count: usize,
+    pub cmd_sdr: Sender<LobbyCommand>
 }
 
 #[derive(Debug)]
@@ -52,8 +51,7 @@ impl SharedState {
     pub fn register_lobby(&mut self, cmd_sdr: Sender<LobbyCommand>) -> LobbyCode {
         let lobby_code = self.rng.random_range(1000..=9999).to_string();
         self.lobbies.insert(lobby_code.clone(), LobbyHandle {
-            cmd_sdr,
-            player_count: 1,
+            cmd_sdr
         });
         return lobby_code;
     }
@@ -67,18 +65,6 @@ impl SharedState {
 
     pub fn deregister_lobby(&mut self, lobby_code: &LobbyCode) -> Option<LobbyHandle> {
         self.lobbies.remove(lobby_code)
-    }
-
-    pub fn increment_lobby_player_count(&mut self, lobby_code: &LobbyCode) {
-        if let Some(handle) = self.lobbies.get_mut(lobby_code) {
-            handle.player_count += 1;
-        }
-    }
-
-    pub fn decrement_lobby_player_count(&mut self, lobby_code: &LobbyCode) {
-        if let Some(handle) = self.lobbies.get_mut(lobby_code) {
-            handle.player_count = handle.player_count.saturating_sub(1);
-        }
     }
 
     pub fn de_idle_player_by_id(&mut self, player_id: PlayerId) -> Option<(PlayerId, PlayerConnection)> {
@@ -117,11 +103,9 @@ pub async fn lobby_manager_task(
                 match cmd {
                     LobbyCommand::AddPlayer { id, player_connection, action_rcr } => {
                         lobby.register_player(id.clone(), player_connection, action_rcr);
-                        state.lock().await.increment_lobby_player_count(&code);
                     },
                     LobbyCommand::RemovePlayer { id, return_to_idle } => {
                         if let Some((player_id, connection)) = lobby.deregister_player(&id) {
-                            state.lock().await.decrement_lobby_player_count(&code);
                             if return_to_idle {
                                 state.lock().await.register_idle_player(player_id, connection);
                             }

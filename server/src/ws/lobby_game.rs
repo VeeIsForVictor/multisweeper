@@ -17,7 +17,9 @@ pub struct LobbyGame {
 }
 
 impl From<Lobby> for LobbyGame {
-    fn from(value: Lobby) -> Self {
-        
+    fn from(lobby: Lobby) -> Self {
+        while lobby.player_count() > 0 {
+            lobby.deregister_player(player_id);
+        }
     }
 }
