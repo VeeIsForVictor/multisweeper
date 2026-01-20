@@ -8,6 +8,13 @@ use error::GameError;
 
 use crate::game::board::RevealResult;
 
+pub struct GameInfo {
+    width: u8,
+    height: u8,
+    number_of_mines: u8,
+    seed: u64
+}
+
 #[derive(Debug)]
 pub enum GameAction {
     REVEAL { x: u8, y: u8 },
@@ -53,6 +60,15 @@ impl Game {
         }
     }
 
+    pub fn info(&self) -> GameInfo {
+        return GameInfo {
+            width: self.board.width,
+            height: self.board.height,
+            number_of_mines: self.board.mines_count(),
+            seed: self.board.seed
+        }
+    }
+
     fn is_coordinate_valid(&self, x: u8, y: u8) -> bool {
         self.board.is_coordinate_valid(x, y)
     }
@@ -79,7 +95,7 @@ impl Game {
     fn flag(&mut self, x: u8, y: u8) -> Result<GamePhase, GameError> {
         match self.board.flag(x, y) {
             Ok(()) => Ok(GamePhase::PLAYING),
-            Err(e) => Err(GameError),
+            Err(_e) => Err(GameError),
         }
     }
 

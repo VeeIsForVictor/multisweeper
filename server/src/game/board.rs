@@ -24,9 +24,9 @@ pub enum RevealResult {
 pub struct Board {
     pub width: u8,
     pub height: u8,
+    pub seed: u64,
     created_mines: Vec<(u8, u8)>,
     cells: Vec<Vec<Cell>>,
-    seed: u64
 }
 
 impl Display for Board {
@@ -121,6 +121,10 @@ impl Board {
         board.evaluate_cells();
 
         return board;
+    }
+
+    pub fn mines_count(&self) -> u8 {
+        self.created_mines.len().try_into().unwrap()
     }
 
     pub fn is_coordinate_valid(&self, x: u8, y: u8) -> bool {
