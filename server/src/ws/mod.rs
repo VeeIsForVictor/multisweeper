@@ -45,10 +45,14 @@ impl SharedState {
         }
     }
 
-    pub fn register_player(&mut self, action_sdr: Sender<ClientMessage>, message_sdr: Sender<ServerMessage>) -> PlayerId {
-        let connection = PlayerConnection { action_sdr: action_sdr, message_sdr: message_sdr };
-        let player_id: PlayerId = format!("player {}", self.latest_player_id_number);
+    pub fn new_player_name(&mut self) -> PlayerId {
+        let player_id = format!("player {}", self.latest_player_id_number);
         self.latest_player_id_number += 1;
+        return player_id;
+    }
+
+    pub fn register_player(&mut self, player_id: PlayerId, action_sdr: Sender<ClientMessage>, message_sdr: Sender<ServerMessage>) -> PlayerId {
+        let connection = PlayerConnection { action_sdr: action_sdr, message_sdr: message_sdr };
         self.idle_players.insert(player_id.clone(), connection);
         return player_id;
     }
@@ -84,7 +88,6 @@ impl SharedState {
     }
 }
 
-#[tracing::instrument]
 pub async fn lobby_manager_task(
     mut cmd_rcr: Receiver<LobbyCommand>,
     host_player: (PlayerId, PlayerConnection),
@@ -158,7 +161,6 @@ pub async fn lobby_manager_task(
     state.lock().await.deregister_lobby(&code);
 }
 
-#[tracing::instrument(skip(lobby))]
 pub async fn game_manager_task(mut lobby: Lobby) -> Lobby {
     let mut game = Game::new(
         crate::game::GameDifficulty::TEST,

@@ -5,9 +5,14 @@ use tokio_tungstenite::{accept_async, tungstenite::Message};
 use futures_util::{SinkExt, stream::StreamExt};
 
 use tracing::{debug, info};
+use tracing_forest::ForestLayer;
+use tracing_futures::Instrument;
+use tracing_subscriber::{EnvFilter, Layer, Registry};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 use crate::error::ConnectionError;
 use crate::ws::protocol::{ClientMessage, ServerMessage, ErrorCode};
-use crate::ws::SharedState;
+use crate::ws::{PlayerId, SharedState};
 use crate::ws::{lobby_manager_task, player::{ConnectionState, IdleState, LobbyState}, protocol::{IdleAction, LobbyAction, LobbyCommand}};
 
 mod game;
@@ -15,28 +20,35 @@ mod cli_local;
 mod error;
 mod ws;
 
-#[tokio::main]
-#[tracing::instrument]
+#[tokio::main(flavor = "multi_thread")]
 async fn main() {
-    tracing_forest::init();
+    Registry::default()
+        .with(ForestLayer::default()
+            .with_filter(
+                EnvFilter::builder()
+                    .parse_lossy("info,tungstenite=warn")
+            )
+        ).init();
     let state = Arc::new(Mutex::new(SharedState::new(69)));
     let listener = TcpListener::bind("localhost:8080").await.expect("failed to bind to port");
     println!("WebSocket server is now open at port 8080");
+    info!("test");
 
-    while let Ok((stream, _)) = listener.accept().await {
-        tokio::spawn(handle_connection(stream, state.clone()));
+    while let Ok((stream, addr)) = listener.accept().await {
+        let conn_id = state.lock().await.new_player_name();
+        tokio::spawn(handle_connection(stream, conn_id.clone(), state.clone()).instrument(tracing::info_span!("tcp", %addr)));
     }
 }
 
-#[tracing::instrument]
-async fn handle_connection(stream: tokio::net::TcpStream, state: Arc<Mutex<SharedState>>) {
+async fn handle_connection(stream: tokio::net::TcpStream, conn_id: PlayerId, state: Arc<Mutex<SharedState>>) {
     let ws_stream = accept_async(stream).await.expect("failed to wrap websocket stream");
     let (tx, rx) = ws_stream.split();
 
     let (action_sdr, action_rcr) = tokio::sync::mpsc::channel::<ClientMessage>(32);
     let (message_sdr, message_rcr) = tokio::sync::mpsc::channel::<ServerMessage>(32);
 
-    let player_id = state.lock().await.register_player(action_sdr.clone(), message_sdr);
+    let player_id = state.lock().await.register_player(conn_id, action_sdr.clone(), message_sdr);
+    info!("player registration done");
 
     let mut handler = ConnectionHandler::new(
         player_id,
@@ -58,6 +70,7 @@ struct ConnectionHandler {
 }
 
 impl ConnectionHandler {
+    #[tracing::instrument]
     fn new(
         player_id: String,
         state: Arc<Mutex<SharedState>>,
