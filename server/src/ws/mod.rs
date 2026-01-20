@@ -1,11 +1,14 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
+use std::time::Duration;
 use rand::{Rng, SeedableRng};
 use rand_pcg::Pcg64;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::{Receiver, Sender};
 
+use tokio::time::sleep;
 use tracing::{info, warn};
+use crate::game::Game;
 use crate::ws::lobby::{Lobby, LobbyCode, LobbyStatus};
 use crate::ws::lobby_game::LobbyGame;
 use crate::ws::protocol::{ClientMessage, LobbyAction, LobbyCommand, PlayerConnection, ServerMessage};
@@ -157,7 +160,34 @@ pub async fn lobby_manager_task(
 }
 
 #[tracing::instrument(skip(lobby))]
-pub async fn game_manager_task(lobby: Lobby) -> Lobby {
-    let game: LobbyGame = lobby.into();
+pub async fn game_manager_task(mut lobby: Lobby) -> Lobby {
+    let game = Game::new(
+        crate::game::GameDifficulty::TEST,
+        1234
+    );
+
+    let mut player_order = VecDeque::from(lobby.get_players());
+    let game_info = game.info();
+    
+    lobby.broadcast_message(ServerMessage::GameInfo { 
+        code: lobby.get_code().clone(), 
+        width: game_info.width,
+        height: game_info.height,
+        number_of_mines: game_info.number_of_mines,
+        seed: game_info.seed
+    }).await;
+
+    while let Some(player) = player_order.pop_front() {
+        let timer = sleep(Duration::from_secs(30));
+
+        tokio::select! {
+            _timeout = timer => {
+                
+            }
+        }
+
+        player_order.push_back(player);
+    }
+    
     return lobby;
 }
