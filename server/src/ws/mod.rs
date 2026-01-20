@@ -142,15 +142,12 @@ pub async fn lobby_manager_task(
         }
 
         lobby.broadcast_state().await;
-
         if let LobbyStatus::Starting = lobby.status {
             lobby.broadcast_message(ServerMessage::GameStarted).await;
+            lobby = game_manager_task(lobby).await;
         }
     }
-
-    if let LobbyStatus::Starting = lobby.status {
-        lobby = game_manager_task(lobby).await;
-    }
+    
 
     info!("Lobby {} shutting down, notifying players and cleaning up", code);
     let _ = lobby.broadcast_message(ServerMessage::Error {
