@@ -49,6 +49,7 @@ pub enum PlayerResult {
     LOST,
     PLAYING,
     STALLED,
+    TIMEOUT
 }
 
 impl From<GamePhase> for PlayerResult {

@@ -209,7 +209,7 @@ pub async fn game_manager_task(mut lobby: Lobby) -> Lobby {
                     }
                 },
                 _timeout = timer => {
-                    PlayerResult::LOST
+                    PlayerResult::TIMEOUT
                 },
             };
 
@@ -220,7 +220,7 @@ pub async fn game_manager_task(mut lobby: Lobby) -> Lobby {
                 break;
             }
         }
-        
+
         if let PlayerResult::PLAYING = result {
             player_order.push_back(current_player.clone());
         }
