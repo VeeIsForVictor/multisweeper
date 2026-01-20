@@ -81,6 +81,7 @@ pub enum ServerMessage {
     LobbyState { code: LobbyCode, players: Vec<PlayerId>, host_id: PlayerId, status: LobbyStatus },
     GameStarted,
     GameInfo { code: LobbyCode, x_bound: u8, y_bound: u8, number_of_mines: u8, seed: u64 },
+    PlayerTurn(PlayerId),
     PlayerAction(PlayerId, PlayerAction),
     PlayerResult(PlayerId, PlayerResult),
     Error { code: ErrorCode, message: String }
