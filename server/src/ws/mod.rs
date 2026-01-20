@@ -1,12 +1,14 @@
 use std::collections::{HashMap, VecDeque};
+use std::result;
 use std::sync::Arc;
+use std::thread::current;
 use std::time::Duration;
 use rand::{Rng, SeedableRng};
 use rand_pcg::Pcg64;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::{Receiver, Sender};
 
-use tokio::time::sleep;
+use tokio::time::{Instant, sleep, sleep_until};
 use tracing::{info, warn};
 use crate::game::Game;
 use crate::ws::lobby::{Lobby, LobbyCode, LobbyStatus};
@@ -178,29 +180,50 @@ pub async fn game_manager_task(mut lobby: Lobby) -> Lobby {
     }).await;
 
     while let Some(current_player) = player_order.pop_front() {
-        let timer = sleep(Duration::from_secs(30));
+        lobby.broadcast_message(ServerMessage::PlayerTurn(current_player.clone())).await;
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let mut result = PlayerResult::PLAYING;
 
         loop {
-            let result: PlayerResult = tokio::select! {
-                action = lobby.next_client_message() => {
+            let timer = sleep_until(deadline);
+    
+            result = tokio::select! {
+                action = lobby.next_player_message(current_player.clone()) => {
                     match action {
-                        Some((player_id, message)) => {
-                            if player_id != current_player {
-                                PlayerResult::STALLED
-                            } else {
-                                PlayerResult::WON
-                            }
+                        Some(action) => {
+                            match game.handle_action(action.clone().into()) {
+                                Ok(result) => {
+                                    lobby.broadcast_message(ServerMessage::PlayerAction(current_player.clone(), action)).await;
+                                    result.into()
+                                },
+                                Err(_) => {
+                                    lobby.send_player_error(
+                                        current_player.clone(), 
+                                        crate::error::GameError::GameLogicError
+                                    ).await;
+                                    PlayerResult::STALLED
+                                },
+                            } 
                         },
-                        None => todo!(),
+                        None => PlayerResult::LOST,
                     }
                 },
                 _timeout = timer => {
                     PlayerResult::LOST
                 },
             };
-        }
 
-        player_order.push_back(current_player);
+            if let PlayerResult::STALLED = result {
+                warn!("Player {} stalled!", current_player.clone());
+            } else {
+                lobby.broadcast_message(ServerMessage::PlayerResult(current_player.clone(), result.clone())).await;
+                break;
+            }
+        }
+        
+        if let PlayerResult::PLAYING = result {
+            player_order.push_back(current_player.clone());
+        }
     }
     
     return lobby;
