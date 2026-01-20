@@ -162,7 +162,7 @@ impl ConnectionHandler {
         }
     }
 
-    async fn handle_game_action(&mut self, _action: crate::ws::protocol::GameAction) -> Result<(), ConnectionError> {
+    async fn handle_game_action(&mut self, _action: crate::ws::protocol::PlayerAction) -> Result<(), ConnectionError> {
         todo!();
     }
 
