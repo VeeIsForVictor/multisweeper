@@ -46,16 +46,17 @@ impl Display for Game {
 impl Game {
     #[tracing::instrument]
     pub fn new(difficulty: GameDifficulty, seed: u64) -> Self {
+        let board = Board::new(
+            (difficulty as u8) * 4,
+            (difficulty as u8) * 4,
+            (difficulty as u8) * 3,
+            seed
+        );
         Game {
-            board: Board::new(
-                (difficulty as u8) * 4,
-                (difficulty as u8) * 4,
-                (difficulty as u8) * 3,
-                seed
-            ),
+            board: board.clone(),
             difficulty,
             state: GameState {
-                phase: GamePhase::PLAYING,
+                phase: GamePhase::PLAYING(board.to_string()),
             },
         }
     }
@@ -87,14 +88,14 @@ impl Game {
         match revealed_state {
             RevealResult::Mine => Ok(GamePhase::LOST),
             RevealResult::DoNothing => Ok(GamePhase::STALLED),
-            _ => Ok(GamePhase::PLAYING),
+            _ => Ok(GamePhase::PLAYING(self.board.to_string())),
         }
     }
 
     #[tracing::instrument(skip(self))]
     fn flag(&mut self, x: u8, y: u8) -> Result<GamePhase, GameError> {
         match self.board.flag(x, y) {
-            Ok(()) => Ok(GamePhase::PLAYING),
+            Ok(()) => Ok(GamePhase::PLAYING(self.board.to_string())),
             Err(_e) => Err(GameError),
         }
     }
@@ -104,7 +105,7 @@ impl Game {
         match action {
             GameAction::REVEAL { x, y } => {
                 let reveal = self.reveal(x, y);
-                if let Ok(GamePhase::PLAYING) = reveal
+                if let Ok(GamePhase::PLAYING(_)) = reveal
                     && self.board.is_all_safe_cells_revealed()
                 {
                     return Ok(GamePhase::WON);
@@ -124,7 +125,7 @@ impl Game {
 pub enum GamePhase {
     WON,
     LOST,
-    PLAYING,
+    PLAYING(String),
     STALLED,
 }
 

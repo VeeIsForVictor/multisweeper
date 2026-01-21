@@ -20,7 +20,7 @@ pub enum RevealResult {
     DoNothing,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Board {
     pub width: u8,
     pub height: u8,
@@ -212,7 +212,7 @@ impl Board {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Cell {
     pub is_mine: bool,
     pub adjacent_mines: u8,
