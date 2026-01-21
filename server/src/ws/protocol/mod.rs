@@ -57,7 +57,7 @@ impl From<GamePhase> for PlayerResult {
         match value {
             GamePhase::WON => PlayerResult::WON,
             GamePhase::LOST => PlayerResult::LOST,
-            GamePhase::PLAYING(str) => PlayerResult::PLAYING(str),
+            GamePhase::PLAYING(board_string) => PlayerResult::PLAYING(board_string),
             GamePhase::STALLED => PlayerResult::STALLED,
         }
     }

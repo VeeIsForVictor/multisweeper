@@ -181,9 +181,9 @@ pub async fn game_manager_task(mut lobby: Lobby) -> Lobby {
     while let Some(current_player) = player_order.pop_front() {
         lobby.broadcast_message(ServerMessage::PlayerTurn(current_player.clone())).await;
         let deadline = Instant::now() + Duration::from_secs(30);
-        let mut result = PlayerResult::PLAYING;
+        let mut result = PlayerResult::STALLED;
 
-        loop {
+        while let PlayerResult::STALLED = result {
             let timer = sleep_until(deadline);
     
             result = tokio::select! {
@@ -191,9 +191,9 @@ pub async fn game_manager_task(mut lobby: Lobby) -> Lobby {
                     match action {
                         Some(action) => {
                             match game.handle_action(action.clone().into()) {
-                                Ok(result) => {
+                                Ok(game_phase) => {
                                     lobby.broadcast_message(ServerMessage::PlayerAction(current_player.clone(), action)).await;
-                                    result.into()
+                                    PlayerResult::from(game_phase)
                                 },
                                 Err(_) => {
                                     lobby.send_player_error(
@@ -216,11 +216,10 @@ pub async fn game_manager_task(mut lobby: Lobby) -> Lobby {
                 warn!("Player {} stalled!", current_player.clone());
             } else {
                 lobby.broadcast_message(ServerMessage::PlayerResult(current_player.clone(), result.clone())).await;
-                break;
             }
         }
 
-        if let PlayerResult::PLAYING = result {
+        if let PlayerResult::PLAYING(_) = result {
             player_order.push_back(current_player.clone());
         }
     }

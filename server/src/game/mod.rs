@@ -33,7 +33,6 @@ pub enum GameDifficulty {
 pub struct Game {
     board: Board,
     difficulty: GameDifficulty,
-    state: GameState,
 }
 
 impl Display for Game {
@@ -54,10 +53,7 @@ impl Game {
         );
         Game {
             board: board.clone(),
-            difficulty,
-            state: GameState {
-                phase: GamePhase::PLAYING(board.to_string()),
-            },
+            difficulty
         }
     }
 
@@ -121,7 +117,7 @@ impl Game {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum GamePhase {
     WON,
     LOST,
@@ -129,7 +125,7 @@ pub enum GamePhase {
     STALLED,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GameState {
     phase: GamePhase,
 }
