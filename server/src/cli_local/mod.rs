@@ -52,7 +52,7 @@ pub fn play_game(seed: u64) {
                 println!("you lost!\n{}", game);
                 break;
             }
-            GamePhase::PLAYING => (),
+            GamePhase::PLAYING(_) => (),
             GamePhase::STALLED => {
                 println!("invalid move");
             }
