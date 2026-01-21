@@ -105,7 +105,7 @@ pub async fn lobby_manager_task(
     host_player: (PlayerId, PlayerConnection),
     action_rcr: Receiver<ClientMessage>,
     code: String,
-    state: Arc<Mutex<SharedState>>,
+    mut state: Arc<Mutex<SharedState>>,
 ) {
     let (host_id, connection) = host_player;
 
@@ -159,7 +159,7 @@ pub async fn lobby_manager_task(
         lobby.broadcast_state().await;
         if let LobbyStatus::Starting = lobby.status {
             lobby.broadcast_message(ServerMessage::GameStarted).await;
-            lobby = game_manager_task(lobby).await;
+            (cmd_rcr, lobby, state) = game_manager_task(cmd_rcr, lobby, state).await;
         }
     }
 
@@ -177,7 +177,7 @@ pub async fn lobby_manager_task(
     state.lock().await.deregister_lobby(&code);
 }
 
-pub async fn game_manager_task(mut lobby: Lobby) -> Lobby {
+pub async fn game_manager_task(mut cmd_rcr: Receiver<LobbyCommand>, mut lobby: Lobby, state: Arc<Mutex<SharedState>>) -> (Receiver<LobbyCommand>, Lobby, Arc<Mutex<SharedState>>) {
     let mut game = Game::new(crate::game::GameDifficulty::TEST, 1234);
 
     let mut player_order = VecDeque::from(lobby.get_players());
@@ -204,6 +204,23 @@ pub async fn game_manager_task(mut lobby: Lobby) -> Lobby {
             let timer = sleep_until(deadline);
 
             result = tokio::select! {
+                cmd = cmd_rcr.recv() => {
+                    match cmd {
+                        Some(LobbyCommand::AddPlayer { id, player_connection, action_rcr }) => {
+                            lobby.register_player(id.clone(), player_connection, action_rcr);
+                            PlayerResult::STALLED
+                        },
+                        Some(LobbyCommand::RemovePlayer { id, return_to_idle }) => {
+                            if let Some((player_id, connection)) = lobby.deregister_player(&id) {
+                                if return_to_idle {
+                                    state.lock().await.register_idle_player(player_id, connection);
+                                }
+                            }
+                            PlayerResult::STALLED
+                        },
+                        None => PlayerResult::STALLED
+                    }
+                },
                 action = lobby.next_player_message(current_player.clone()) => {
                     match action {
                         Some(action) => {
@@ -238,6 +255,7 @@ pub async fn game_manager_task(mut lobby: Lobby) -> Lobby {
                         result.clone(),
                     ))
                     .await;
+                lobby.broadcast_message(ServerMessage::GameRound(Vec::from(player_order.clone()))).await;
             }
         }
 
@@ -246,5 +264,5 @@ pub async fn game_manager_task(mut lobby: Lobby) -> Lobby {
         }
     }
 
-    return lobby;
+    return (cmd_rcr, lobby, state);
 }

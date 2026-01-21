@@ -108,6 +108,7 @@ pub enum ServerMessage {
     PlayerTurn(PlayerId),
     PlayerAction(PlayerId, PlayerAction),
     PlayerResult(PlayerId, PlayerResult),
+    GameRound(Vec<PlayerId>),
     Error {
         code: ErrorCode,
         message: String,
