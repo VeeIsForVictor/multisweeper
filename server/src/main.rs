@@ -15,7 +15,6 @@ use crate::ws::{
 };
 use tracing::{debug, info};
 use tracing_forest::ForestLayer;
-use tracing_futures::Instrument;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, Layer, Registry};
@@ -285,7 +284,7 @@ impl ConnectionHandler {
     }
 
     async fn handle_start_game(&mut self) -> Result<(), ConnectionError> {
-        let ConnectionState::Lobby(LobbyState { code: _ }) = &self.connection_state else {
+        let ConnectionState::Lobby(LobbyState { code }) = &self.connection_state else {
             return Err(ConnectionError::StateTransitionInvalid {
                 from: format!("{:?}", self.connection_state),
                 action: "StartGame".to_string(),
@@ -296,17 +295,20 @@ impl ConnectionHandler {
             .action_sdr
             .send(ClientMessage::LobbyClient(LobbyAction::StartGame))
             .await;
-        self.connection_state = ConnectionState::Game;
+        self.connection_state = ConnectionState::Game(GameState { code: code.to_string(), status: None });
         Ok(())
     }
 
     async fn handle_leave_lobby(&mut self) -> Result<(), ConnectionError> {
-        let ConnectionState::Lobby(LobbyState { code }) = &self.connection_state else {
-            return Err(ConnectionError::StateTransitionInvalid {
+        let mut  code = &String::from("");
+        match &self.connection_state {
+            ConnectionState::Lobby(LobbyState { code: lobby_code }) => code = lobby_code,
+            ConnectionState::Game(GameState { code: lobby_code, status: _ }) => code = lobby_code,
+            _ => return Err(ConnectionError::StateTransitionInvalid {
                 from: format!("{:?}", self.connection_state),
                 action: "LeaveLobby".to_string(),
-            });
-        };
+            })
+        }
 
         let (_new_action_sdr, new_action_rcr) = tokio::sync::mpsc::channel::<ClientMessage>(32);
         let state = self.state.lock().await;
@@ -337,6 +339,13 @@ impl ConnectionHandler {
     }
 
     async fn forward_server_message(&mut self, msg: ServerMessage) {
+        if let ServerMessage::PlayerResult(player_id, result) = msg.clone() {
+            if self.player_id == player_id {
+                if let ConnectionState::Game(GameState { code, status: _ }) = &self.connection_state {
+                    self.connection_state = ConnectionState::Game(GameState { code: code.to_string(), status: Some(result) })
+                } 
+            }
+        }
         if let Ok(response) = serde_json::to_string(&msg) {
             let _ = self.tx.send(Message::Text(response.into())).await;
         }

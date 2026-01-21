@@ -15,7 +15,7 @@ pub struct LobbyState {
 #[derive(Debug)]
 pub struct GameState {
     pub code: LobbyCode,
-    pub status: PlayerResult
+    pub status: Option<PlayerResult>
 }
 
 #[derive(Debug)]
