@@ -47,7 +47,7 @@ impl Into<crate::game::GameAction> for PlayerAction {
 pub enum PlayerResult {
     WON,
     LOST,
-    PLAYING,
+    PLAYING(String),
     STALLED,
     TIMEOUT
 }
@@ -57,7 +57,7 @@ impl From<GamePhase> for PlayerResult {
         match value {
             GamePhase::WON => PlayerResult::WON,
             GamePhase::LOST => PlayerResult::LOST,
-            GamePhase::PLAYING => PlayerResult::PLAYING,
+            GamePhase::PLAYING(str) => PlayerResult::PLAYING(str),
             GamePhase::STALLED => PlayerResult::STALLED,
         }
     }
