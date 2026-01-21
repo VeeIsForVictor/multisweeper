@@ -177,7 +177,11 @@ pub async fn lobby_manager_task(
     state.lock().await.deregister_lobby(&code);
 }
 
-pub async fn game_manager_task(mut cmd_rcr: Receiver<LobbyCommand>, mut lobby: Lobby, state: Arc<Mutex<SharedState>>) -> (Receiver<LobbyCommand>, Lobby, Arc<Mutex<SharedState>>) {
+pub async fn game_manager_task(
+    mut cmd_rcr: Receiver<LobbyCommand>,
+    mut lobby: Lobby,
+    state: Arc<Mutex<SharedState>>,
+) -> (Receiver<LobbyCommand>, Lobby, Arc<Mutex<SharedState>>) {
     let mut game = Game::new(crate::game::GameDifficulty::TEST, 1234);
 
     let mut player_order = VecDeque::from(lobby.get_players());
@@ -255,7 +259,9 @@ pub async fn game_manager_task(mut cmd_rcr: Receiver<LobbyCommand>, mut lobby: L
                         result.clone(),
                     ))
                     .await;
-                lobby.broadcast_message(ServerMessage::GameRound(Vec::from(player_order.clone()))).await;
+                lobby
+                    .broadcast_message(ServerMessage::GameRound(Vec::from(player_order.clone())))
+                    .await;
             }
         }
 
