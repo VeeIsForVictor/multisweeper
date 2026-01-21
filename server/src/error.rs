@@ -36,7 +36,7 @@ pub enum GameError {
     NotYourTurn,
 
     #[error("Game logic error")]
-    GameLogicError
+    GameLogicError,
 }
 
 impl From<ConnectionError> for ErrorCode {

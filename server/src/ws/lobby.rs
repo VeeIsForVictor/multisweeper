@@ -1,17 +1,24 @@
-use std::collections::HashMap;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use tokio::sync::mpsc::Receiver;
 use tokio_stream::{StreamMap, wrappers::ReceiverStream};
 
-use crate::{error::{GameError, LobbyError}, game::Game, ws::{PlayerId, protocol::{ClientMessage, PlayerAction, PlayerConnection, ServerMessage}}};
+use crate::{
+    error::{GameError, LobbyError},
+    game::Game,
+    ws::{
+        PlayerId,
+        protocol::{ClientMessage, PlayerAction, PlayerConnection, ServerMessage},
+    },
+};
 
 pub type LobbyCode = String;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum LobbyStatus {
     Waiting,
-    Starting
+    Starting,
 }
 
 pub struct Lobby {
@@ -24,7 +31,12 @@ pub struct Lobby {
 }
 
 impl Lobby {
-    pub fn new(host_id: PlayerId, host_connection: PlayerConnection, action_rcr: Receiver<ClientMessage>, code: LobbyCode) -> Self {
+    pub fn new(
+        host_id: PlayerId,
+        host_connection: PlayerConnection,
+        action_rcr: Receiver<ClientMessage>,
+        code: LobbyCode,
+    ) -> Self {
         let mut lobby = Lobby {
             code,
             players: HashMap::new(),
@@ -35,21 +47,32 @@ impl Lobby {
         };
 
         lobby.players.insert(host_id.clone(), host_connection);
-        lobby.player_streams.insert(host_id, ReceiverStream::from(action_rcr));
+        lobby
+            .player_streams
+            .insert(host_id, ReceiverStream::from(action_rcr));
 
         lobby
     }
 
-    pub fn register_player(&mut self, player_id: PlayerId, player_connection: PlayerConnection, action_rcr: Receiver<ClientMessage>) -> PlayerId {
+    pub fn register_player(
+        &mut self,
+        player_id: PlayerId,
+        player_connection: PlayerConnection,
+        action_rcr: Receiver<ClientMessage>,
+    ) -> PlayerId {
         self.players.insert(player_id.clone(), player_connection);
-        self.player_streams.insert(player_id.clone(), ReceiverStream::from(action_rcr));
+        self.player_streams
+            .insert(player_id.clone(), ReceiverStream::from(action_rcr));
         player_id
     }
 
-    pub fn deregister_player(&mut self, player_id: &PlayerId) -> Option<(PlayerId, PlayerConnection)> {
+    pub fn deregister_player(
+        &mut self,
+        player_id: &PlayerId,
+    ) -> Option<(PlayerId, PlayerConnection)> {
         let player_data = match self.players.remove(player_id) {
             Some(data) => data,
-            None => return None
+            None => return None,
         };
         let _ = self.player_streams.remove(player_id);
 
@@ -89,8 +112,9 @@ impl Lobby {
             code: self.code.clone(),
             players: players_list,
             host_id: self.host_id.clone(),
-            status: self.status.clone()
-        }).await;
+            status: self.status.clone(),
+        })
+        .await;
     }
 
     pub async fn broadcast_message(&mut self, msg: ServerMessage) {
@@ -114,18 +138,22 @@ impl Lobby {
             let next_action = self.next_client_message().await;
             match next_action {
                 Some((player_id, action)) => {
-                    if (player_id == target_player) { 
+                    if (player_id == target_player) {
                         match action {
                             ClientMessage::GameClient(player_action) => return Some(player_action),
                             _ => {
-                                self.send_player_error(target_player.clone(), GameError::GameLogicError).await;
+                                self.send_player_error(
+                                    target_player.clone(),
+                                    GameError::GameLogicError,
+                                )
+                                .await;
                                 continue;
                             }
                         }
-                    }
-                    else { 
-                        self.send_player_error(target_player.clone(), GameError::NotYourTurn).await;
-                        continue; 
+                    } else {
+                        self.send_player_error(target_player.clone(), GameError::NotYourTurn)
+                            .await;
+                        continue;
                     }
                 }
                 None => return None,
@@ -136,10 +164,14 @@ impl Lobby {
     pub async fn send_player_error(&mut self, target_player: PlayerId, error: GameError) {
         match &self.players.get(&target_player) {
             Some(connection) => {
-                let _send = connection.message_sdr.send(
-                    ServerMessage::Error { code: error.into() , message: String::from("An error occurred during your action") }
-                ).await;
-            },
+                let _send = connection
+                    .message_sdr
+                    .send(ServerMessage::Error {
+                        code: error.into(),
+                        message: String::from("An error occurred during your action"),
+                    })
+                    .await;
+            }
             None => (),
         }
     }

@@ -12,7 +12,7 @@ pub struct GameInfo {
     pub width: u8,
     pub height: u8,
     pub number_of_mines: u8,
-    pub seed: u64
+    pub seed: u64,
 }
 
 #[derive(Debug)]
@@ -49,11 +49,11 @@ impl Game {
             (difficulty as u8) * 4,
             (difficulty as u8) * 4,
             (difficulty as u8) * 3,
-            seed
+            seed,
         );
         Game {
             board: board.clone(),
-            difficulty
+            difficulty,
         }
     }
 
@@ -62,8 +62,8 @@ impl Game {
             width: self.board.width,
             height: self.board.height,
             number_of_mines: self.board.mines_count(),
-            seed: self.board.seed
-        }
+            seed: self.board.seed,
+        };
     }
 
     fn is_coordinate_valid(&self, x: u8, y: u8) -> bool {
