@@ -1,6 +1,6 @@
 use tokio::sync::mpsc::Receiver;
 
-use crate::ws::{lobby::LobbyCode, protocol::ClientMessage};
+use crate::ws::{lobby::LobbyCode, protocol::{ClientMessage, PlayerResult}};
 
 #[derive(Debug)]
 pub struct IdleState {
@@ -13,10 +13,16 @@ pub struct LobbyState {
 }
 
 #[derive(Debug)]
+pub struct GameState {
+    pub code: LobbyCode,
+    pub status: PlayerResult
+}
+
+#[derive(Debug)]
 pub enum ConnectionState {
     Idle(IdleState),
     Lobby(LobbyState),
-    Game,
+    Game(GameState),
     Disconnected,
 }
 
@@ -33,7 +39,7 @@ impl ConnectionState {
     }
 
     pub fn is_game(&self) -> bool {
-        matches!(self, ConnectionState::Game)
+        matches!(self, ConnectionState::Game(_))
     }
 
     pub fn is_disconnected(&self) -> bool {

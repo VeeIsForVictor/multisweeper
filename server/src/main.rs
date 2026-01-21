@@ -5,6 +5,7 @@ use tokio::sync::Mutex;
 use tokio_tungstenite::{accept_async, tungstenite::Message};
 
 use crate::error::ConnectionError;
+use crate::ws::player::GameState;
 use crate::ws::protocol::{ClientMessage, ErrorCode, ServerMessage};
 use crate::ws::{PlayerId, SharedState};
 use crate::ws::{
@@ -170,7 +171,19 @@ impl ConnectionHandler {
                     }
                 }
             }
-            ConnectionState::Game => todo!(),
+            ConnectionState::Game(GameState { code, status: _ }) => {
+                match self.state.lock().await.get_lobby(code.clone()) {
+                    None => (),
+                    Some((_code, handle)) => {
+                        handle
+                            .send(LobbyCommand::RemovePlayer {
+                                id: self.player_id.clone(),
+                                return_to_idle: false,
+                            })
+                            .await;
+                    }
+                }
+            },
             ConnectionState::Disconnected => todo!(),
         }
     }
