@@ -15,26 +15,23 @@ pub struct ClientMessage {
 
 #[derive(Serialize)]
 pub enum ServerMessage {
-    System(SystemMessage),
-    Room(RoomMessage)
-}
-
-#[derive(Serialize)]
-pub enum SystemMessage {}
-
-#[derive(Serialize)]
-pub enum RoomMessage {
-    State { players: Vec<PlayerId> }
+    RoomState { code: RoomCode, owner: PlayerId, players: Vec<PlayerId> },
+    GameStarted
 }
 
 #[derive(Deserialize)]
 #[serde(tag = "type", content = "json")]
 pub enum ClientRequest {
     Ping,
+    // Room-related
+    QueryRooms,
     JoinRoom { room_code: RoomCode },
     CreateRoom,
     LeaveRoom,
-    QueryRooms
+    // Game-related
+    StartGame,
+    GameAction,
+    GameQuery
 }
 
 impl TryFrom<Message> for ClientRequest {
