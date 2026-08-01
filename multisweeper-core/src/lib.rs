@@ -119,6 +119,10 @@ impl Game {
 
     pub fn lose_game(&mut self) {
         self.board.reveal_all();
-        self.set_state(ActionOutcome::Lost);
+        self.last_state = GameSnapshot {
+            status: GameStatus::NoWinner,
+            action_result: GameActionResult::Eliminated,
+            board: self.expose_board(),
+        }
     }
 }

@@ -32,7 +32,7 @@ pub enum GameActionResult {
     Stalled,
     Started,
     Eliminated,
-    Won
+    Won,
 }
 
 impl From<ActionOutcome> for GameActionResult {
