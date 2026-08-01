@@ -13,7 +13,19 @@ pub struct ClientMessage {
     pub command: PlayerCommand
 }
 
-pub enum ServerMessage {}
+#[derive(Serialize)]
+pub enum ServerMessage {
+    System(SystemMessage),
+    Room(RoomMessage)
+}
+
+#[derive(Serialize)]
+pub enum SystemMessage {}
+
+#[derive(Serialize)]
+pub enum RoomMessage {
+    State { players: Vec<PlayerId> }
+}
 
 #[derive(Deserialize)]
 #[serde(tag = "type", content = "json")]
@@ -22,6 +34,7 @@ pub enum ClientRequest {
     JoinRoom { room_code: RoomCode },
     CreateRoom,
     LeaveRoom,
+    QueryRooms
 }
 
 impl TryFrom<Message> for ClientRequest {
@@ -40,7 +53,8 @@ impl TryFrom<Message> for ClientRequest {
 pub enum ServerResponse {
     Pong,
     AdvertiseRooms { rooms: Vec<RoomCode> },
-    ClientError(String)
+    ClientError(String),
+    Message(ServerMessage)
 }
 
 impl TryInto<Message> for ServerResponse {

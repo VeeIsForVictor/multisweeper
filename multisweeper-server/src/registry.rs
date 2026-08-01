@@ -51,4 +51,8 @@ impl Registry {
             None => Err(RegistryError::RoomNotFound(code).into())
         }
     }
+
+    pub fn request_lobbies(&mut self) -> Vec<&RoomCode> {
+        self.rooms.keys().collect()
+    }
 }
