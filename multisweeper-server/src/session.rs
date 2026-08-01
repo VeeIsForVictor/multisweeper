@@ -141,6 +141,9 @@ impl Session {
                 let rooms = self.registry.lock().request_lobbies().iter().map(|code| code.to_string()).collect();
                 Ok(self.send_outbound(ServerResponse::AdvertiseRooms { rooms }).await?)
             },
+            ClientRequest::StartGame => todo!(),
+            ClientRequest::GameAction => todo!(),
+            ClientRequest::GameQuery => todo!(),
         }
     }
 
