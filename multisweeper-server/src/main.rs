@@ -1,8 +1,12 @@
 use anyhow::Result;
 use clap::Parser;
-use tokio::net::{TcpListener, TcpStream};
+use tokio::{net::{TcpListener, TcpStream}};
 use tracing::{info, warn};
-use std::env;
+use triomphe::Arc;
+use std::{env};
+use parking_lot::Mutex;
+
+use crate::{registry::{Registry, RegistryHandle}, session::Session};
 
 mod protocol;
 mod registry;
@@ -33,12 +37,13 @@ fn read_config() -> Result<Config> {
 #[tokio::main]
 async fn main() -> Result<()> {
     let config = read_config()?;
+    let registry = Arc::new(Mutex::new(Registry::new()));
     let listener = TcpListener::bind(format!("0.0.0.0:{}", config.port)).await?;
     
     info!("listening on port {}", config.port);
 
     while let Ok((stream, _addr)) = listener.accept().await {
-        tokio::spawn(accept_connection(stream));
+        tokio::spawn(accept_connection(stream, registry.clone()));
     }
 
     warn!("terminating server");
@@ -46,6 +51,8 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn accept_connection(stream: TcpStream) -> Result<()> {
-    
+async fn accept_connection(stream: TcpStream, registry: RegistryHandle) -> Result<()> {
+    let id = registry.lock().register_player();
+    let (session, _) = Session::new(id);
+    return Ok(());
 }

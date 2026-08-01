@@ -1,6 +1,11 @@
 use std::collections::HashMap;
 
+use parking_lot::Mutex;
+use triomphe::Arc;
+
 use crate::room::RoomHandle;
+
+pub type RegistryHandle = Arc<Mutex<Registry>>;
 
 pub struct Registry {
     entity_counter: u64,

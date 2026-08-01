@@ -1,4 +1,4 @@
-use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::{self, Sender, Receiver};
 
 use crate::protocol::ServerMessage;
 
@@ -11,5 +11,8 @@ pub struct Session {
 }
 
 impl Session {
-    
+    pub fn new(id: PlayerId) -> (Self, Sender<ServerMessage>) {
+        let (sender, receiver) = mpsc::channel(10);
+        return (Session { id, handle: receiver }, sender)
+    }
 }
