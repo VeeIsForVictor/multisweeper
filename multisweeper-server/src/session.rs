@@ -14,9 +14,7 @@ use tokio_tungstenite::{
 };
 
 use crate::{
-    protocol::{ClientMessage, ClientRequest, ServerMessage, ServerResponse},
-    registry::RegistryHandle,
-    room::RoomHandle,
+    protocol::{ClientMessage, ClientRequest, PlayerCommand, ServerMessage, ServerResponse}, registry::RegistryHandle, room::RoomHandle,
 };
 
 pub type PlayerId = String;
@@ -120,8 +118,20 @@ impl Session {
     async fn handle_inbound(&mut self, request: ClientRequest) -> Result<()> {
         match request {
             ClientRequest::Ping => Ok(self.send_outbound(ServerResponse::Pong).await?),
-            ClientRequest::JoinRoom { room_code } => todo!(),
-            ClientRequest::LeaveRoom => todo!(),
+            ClientRequest::JoinRoom { room_code } => {
+                let maybe_lobby_handle = self.registry.lock().request_lobby(room_code);
+                match maybe_lobby_handle {
+                    Ok(handle) => {
+                        self.room = Some(handle);
+                        self.send_room(PlayerCommand::Join { handle: self.handle.clone() }).await?
+                    },
+                    Err(e) => self.send_outbound(ServerResponse::ClientError(e.to_string())).await?,
+                }
+                Ok(())
+            },
+            ClientRequest::LeaveRoom => {
+                Ok(self.send_room(PlayerCommand::Leave).await?)
+            },
         }
     }
 
@@ -133,9 +143,14 @@ impl Session {
         return Ok(self.outbound.send(response.try_into()?).await?);
     }
 
-    async fn send_room(&mut self, message: ClientMessage) -> Result<()> {
+    async fn send_room(&mut self, command: PlayerCommand) -> Result<()> {
         match &self.room {
-            Some(handle) => Ok(handle.send(message).await?),
+            Some(handle) => Ok(handle.send(
+                ClientMessage {
+                    id: self.id.clone(),
+                    command
+                }
+            ).await?),
             None => Err(SessionError::RoomDropped.into()),
         }
     }

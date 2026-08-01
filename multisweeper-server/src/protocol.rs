@@ -1,9 +1,17 @@
 use serde::{Deserialize, Serialize};
 use tokio_tungstenite::tungstenite::Message;
 
-use crate::room::RoomCode;
+use crate::{room::RoomCode, session::{PlayerHandle, PlayerId}};
 
-pub enum ClientMessage {}
+pub enum PlayerCommand {
+    Join { handle: PlayerHandle },
+    Leave
+}
+
+pub struct ClientMessage {
+    pub id: PlayerId,
+    pub command: PlayerCommand
+}
 
 pub enum ServerMessage {}
 
@@ -31,6 +39,7 @@ impl TryFrom<Message> for ClientRequest {
 pub enum ServerResponse {
     Pong,
     AdvertiseRooms { rooms: Vec<RoomCode> },
+    ClientError(String)
 }
 
 impl TryInto<Message> for ServerResponse {
