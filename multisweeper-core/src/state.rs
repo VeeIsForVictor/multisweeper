@@ -19,7 +19,7 @@ impl From<ActionOutcome> for GameStatus {
         use GameStatus::*;
         match value {
             ActionOutcome::Won => Won,
-            ActionOutcome::Lost => Lost,
+            ActionOutcome::Lost => Playing,
             ActionOutcome::Playing => Playing,
             ActionOutcome::Stalled => Playing,
         }
@@ -31,14 +31,16 @@ pub enum GameActionResult {
     Applied,
     Stalled,
     Started,
+    Eliminated,
+    Won
 }
 
 impl From<ActionOutcome> for GameActionResult {
     fn from(value: ActionOutcome) -> Self {
         use GameActionResult::*;
         match value {
-            ActionOutcome::Won => Applied,
-            ActionOutcome::Lost => Applied,
+            ActionOutcome::Won => Won,
+            ActionOutcome::Lost => Eliminated,
             ActionOutcome::Playing => Applied,
             ActionOutcome::Stalled => Stalled,
         }
