@@ -6,7 +6,7 @@ mod state;
 use board::{Board, RevealResult};
 use error::GameError;
 
-use crate::{action::GameAction, state::{GameCell, GameSnapshot, GameStatus}};
+use crate::{action::GameAction, state::{ActionOutcome, GameActionResult, GameCell, GameSnapshot, GameStatus}};
 
 type GameResult<T> = Result<T, GameError>;
 
@@ -43,7 +43,7 @@ impl Game {
         );
         Game {
             board: board.clone(),
-            last_state: GameSnapshot { status: GameStatus::Playing, board: board.expose_cells() },
+            last_state: GameSnapshot { status: GameStatus::Playing, action_result: GameActionResult::Started , board: board.expose_cells() },
             difficulty,
         }
     }
@@ -61,9 +61,10 @@ impl Game {
         return self.board.expose_cells()
     }
 
-    fn set_state(&mut self, status: GameStatus) -> &GameSnapshot {
+    fn set_state(&mut self, outcome: ActionOutcome) -> &GameSnapshot {
         let new_state = GameSnapshot {
-            status,
+            status: outcome.into(),
+            action_result: outcome.into(),
             board: self.expose_board()
         };
         self.last_state = new_state.clone();
@@ -75,19 +76,19 @@ impl Game {
     }
 
     #[tracing::instrument(skip(self))]
-    fn reveal(&mut self, x: u8, y: u8) -> GameResult<GameStatus> {
+    fn reveal(&mut self, x: u8, y: u8) -> GameResult<ActionOutcome> {
         let reveal_result = self.board.reveal(x, y)?;
         match reveal_result {
-            RevealResult::Mine => Ok(GameStatus::Lost),
-            RevealResult::DoNothing => Ok(GameStatus::Stalled),
-            _ => Ok(GameStatus::Playing),
+            RevealResult::Mine => Ok(ActionOutcome::Lost),
+            RevealResult::DoNothing => Ok(ActionOutcome::Stalled),
+            _ => Ok(ActionOutcome::Playing),
         }
     }
 
     #[tracing::instrument(skip(self))]
-    fn flag(&mut self, x: u8, y: u8) -> Result<GameStatus, GameError> {
+    fn flag(&mut self, x: u8, y: u8) -> Result<ActionOutcome, GameError> {
         match self.board.flag(x, y) {
-            Ok(()) => Ok(GameStatus::Playing),
+            Ok(()) => Ok(ActionOutcome::Playing),
             Err(e) => Err(GameError::BoardError(e)),
         }
     }
@@ -97,10 +98,10 @@ impl Game {
         match action {
             GameAction::Reveal { x, y } => {
                 let reveal = self.reveal(x, y)?;
-                if GameStatus::Playing == reveal
+                if ActionOutcome::Playing == reveal
                     && self.board.is_all_safe_cells_revealed()
                 {
-                    return Ok(self.set_state(GameStatus::Won));
+                    return Ok(self.set_state(ActionOutcome::Won));
                 }
                 return Ok(self.set_state(reveal));
             }
@@ -112,7 +113,7 @@ impl Game {
     }
 
     pub fn lose_game(&mut self) {
-        self.set_state(GameStatus::Lost);
+        self.set_state(ActionOutcome::Lost);
         self.board.reveal_all();
     }
 }
