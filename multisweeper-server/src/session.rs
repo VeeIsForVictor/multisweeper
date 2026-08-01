@@ -31,6 +31,8 @@ pub enum SessionError {
     MailboxDropped,
     #[error("handle to room dropped")]
     RoomDropped,
+    #[error("already joined a room")]
+    RoomAlreadyJoined
 }
 
 pub enum SessionEvent {
@@ -124,6 +126,10 @@ impl Session {
                 Ok(self.send_room(PlayerCommand::Join { handle: self.handle.clone() }).await?)
             }
             ClientRequest::JoinRoom { room_code } => {
+                match &self.room {
+                    Some(_handle) => return Ok(self.send_outbound(ServerResponse::ClientError(SessionError::RoomAlreadyJoined.to_string())).await?),
+                    None => (),
+                };
                 let maybe_lobby_handle = self.registry.lock().request_lobby(room_code);
                 match maybe_lobby_handle {
                     Ok(handle) => {
