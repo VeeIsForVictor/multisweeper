@@ -1,6 +1,7 @@
 use anyhow::Result;
 use clap::Parser;
 use tokio::{net::{TcpListener, TcpStream}};
+use tokio_tungstenite::accept_async;
 use tracing::{info, warn};
 use triomphe::Arc;
 use std::{env};
@@ -52,7 +53,9 @@ async fn main() -> Result<()> {
 }
 
 async fn accept_connection(stream: TcpStream, registry: RegistryHandle) -> Result<()> {
+    let ws_stream = accept_async(stream).await?;
     let id = registry.lock().register_player();
-    let (session, _) = Session::new(id);
+
+    let session = Session::new(id, stream);
     return Ok(());
 }

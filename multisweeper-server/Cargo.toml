@@ -21,3 +21,4 @@ futures-macro = "0.3.33"
 clap = { version = "4.6.5", features = ["derive"] }
 triomphe = "0.1.16"
 parking_lot = "0.12.5"
+futures = "0.3.33"
