@@ -118,6 +118,11 @@ impl Session {
     async fn handle_inbound(&mut self, request: ClientRequest) -> Result<()> {
         match request {
             ClientRequest::Ping => Ok(self.send_outbound(ServerResponse::Pong).await?),
+            ClientRequest::CreateRoom => {
+                let (new_lobby, handle) = self.registry.lock().register_lobby();
+                self.room = Some(handle);
+                Ok(self.send_room(PlayerCommand::Join { handle: self.handle.clone() }).await?)
+            }
             ClientRequest::JoinRoom { room_code } => {
                 let maybe_lobby_handle = self.registry.lock().request_lobby(room_code);
                 match maybe_lobby_handle {

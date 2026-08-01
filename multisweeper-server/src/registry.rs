@@ -5,7 +5,7 @@ use parking_lot::Mutex;
 use thiserror::Error;
 use triomphe::Arc;
 
-use crate::room::{RoomCode, RoomHandle, RoomMailbox};
+use crate::room::{Room, RoomCode, RoomHandle, RoomMailbox};
 
 #[derive(Debug, Error)]
 pub enum RegistryError {
@@ -38,10 +38,11 @@ impl Registry {
         self.generate_name("P")
     }
 
-    pub fn register_lobby(&mut self, handle: RoomHandle) -> String {
-        let name = self.generate_name("L");
-        self.rooms.insert(name.clone(), handle);
-        return name;
+    pub fn register_lobby(&mut self) -> (String, RoomHandle) {
+        let code = self.generate_name("L");
+        let room = Room::new(code.clone());
+        self.rooms.insert(code.clone(), room.request_handle());
+        return (code, room.request_handle());
     }
 
     pub fn request_lobby(&mut self, code: RoomCode) -> Result<RoomHandle, RegistryError> {

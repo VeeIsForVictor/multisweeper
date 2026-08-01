@@ -20,6 +20,7 @@ pub enum ServerMessage {}
 pub enum ClientRequest {
     Ping,
     JoinRoom { room_code: RoomCode },
+    CreateRoom,
     LeaveRoom,
 }
 

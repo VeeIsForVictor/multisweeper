@@ -21,4 +21,12 @@ impl Room {
             handle: sender,
         };
     }
+
+    pub fn code(&self) -> &RoomCode {
+        &self.code
+    }
+
+    pub fn request_handle(&self) -> RoomHandle {
+        self.handle.clone()
+    }
 }
