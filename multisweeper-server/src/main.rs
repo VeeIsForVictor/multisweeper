@@ -1,12 +1,15 @@
 use anyhow::Result;
 use clap::Parser;
-use tokio::{net::{TcpListener, TcpStream}};
+use parking_lot::Mutex;
+use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::accept_async;
 use tracing::{info, warn};
 use triomphe::Arc;
-use parking_lot::Mutex;
 
-use crate::{registry::{Registry, RegistryHandle}, session::Session};
+use crate::{
+    registry::{Registry, RegistryHandle},
+    session::Session,
+};
 
 mod protocol;
 mod registry;
@@ -17,15 +20,17 @@ mod session;
 #[command(version, about, long_about=None)]
 struct Args {
     #[clap(
-        long, 
+        long,
         default_value("8080"),
-        help("Set the port to expose the server on, overrides the $SERVER_PORT environment variable (default: 8080)")
+        help(
+            "Set the port to expose the server on, overrides the $SERVER_PORT environment variable (default: 8080)"
+        )
     )]
-    port: u16
+    port: u16,
 }
 
 struct Config {
-    port: u16
+    port: u16,
 }
 
 fn read_config() -> Result<Config> {
@@ -39,7 +44,7 @@ async fn main() -> Result<()> {
     let config = read_config()?;
     let registry = Arc::new(Mutex::new(Registry::new()));
     let listener = TcpListener::bind(format!("0.0.0.0:{}", config.port)).await?;
-    
+
     info!("listening on port {}", config.port);
 
     while let Ok((stream, _addr)) = listener.accept().await {

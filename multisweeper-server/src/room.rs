@@ -9,12 +9,16 @@ pub type RoomHandle = Sender<ClientMessage>;
 pub struct Room {
     code: RoomCode,
     mailbox: RoomMailbox,
-    handle: RoomHandle
+    handle: RoomHandle,
 }
 
 impl Room {
     pub fn new(code: RoomCode) -> Self {
         let (sender, receiver) = mpsc::channel(10);
-        return Room { code, mailbox: receiver, handle: sender }
+        return Room {
+            code,
+            mailbox: receiver,
+            handle: sender,
+        };
     }
 }

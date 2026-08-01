@@ -1,10 +1,23 @@
 use anyhow::Result;
-use futures::{SinkExt, StreamExt, stream::{SplitSink, SplitStream}};
+use futures::{
+    SinkExt, StreamExt,
+    stream::{SplitSink, SplitStream},
+};
 use thiserror::Error;
-use tokio::{net::TcpStream, sync::mpsc::{self, Receiver, Sender}};
-use tokio_tungstenite::{WebSocketStream, tungstenite::{Error, Message}};
+use tokio::{
+    net::TcpStream,
+    sync::mpsc::{self, Receiver, Sender},
+};
+use tokio_tungstenite::{
+    WebSocketStream,
+    tungstenite::{Error, Message},
+};
 
-use crate::{protocol::{ClientMessage, ClientRequest, ServerMessage, ServerResponse}, registry::RegistryHandle, room::RoomHandle};
+use crate::{
+    protocol::{ClientMessage, ClientRequest, ServerMessage, ServerResponse},
+    registry::RegistryHandle,
+    room::RoomHandle,
+};
 
 pub type PlayerId = String;
 pub type PlayerMailbox = Receiver<ServerMessage>;
@@ -19,12 +32,12 @@ pub enum SessionError {
     #[error("mailbox dropped")]
     MailboxDropped,
     #[error("handle to room dropped")]
-    RoomDropped
+    RoomDropped,
 }
 
 pub enum SessionEvent {
     Inbound(Option<Result<Message, Error>>),
-    Mailbox(Option<ServerMessage>)
+    Mailbox(Option<ServerMessage>),
 }
 
 pub struct Session {
@@ -34,14 +47,22 @@ pub struct Session {
     outbound: PlayerOutbound,
     inbound: PlayerInbound,
     registry: RegistryHandle,
-    room: Option<RoomHandle>
+    room: Option<RoomHandle>,
 }
 
 impl Session {
     pub fn new(id: PlayerId, stream: WebSocketStream<TcpStream>, registry: RegistryHandle) -> Self {
         let (sender, receiver) = mpsc::channel(10);
         let (sink, source) = stream.split();
-        return Session { id, mailbox: receiver, handle: sender, outbound: sink, inbound: source, registry, room: None };
+        return Session {
+            id,
+            mailbox: receiver,
+            handle: sender,
+            outbound: sink,
+            inbound: source,
+            registry,
+            room: None,
+        };
     }
 
     pub fn id(&self) -> &str {
@@ -58,7 +79,7 @@ impl Session {
             Err(e) => {
                 self.terminate();
                 Err(e)
-            },
+            }
         }
     }
 
@@ -77,7 +98,7 @@ impl Session {
                 SessionEvent::Mailbox(server_message) => {
                     let message = self.receive_mailbox(server_message)?;
                     self.handle_mailbox(message).await?;
-                },
+                }
             }
         }
     }
@@ -109,7 +130,7 @@ impl Session {
     }
 
     async fn send_outbound(&mut self, response: ServerResponse) -> Result<()> {
-        return Ok(self.outbound.send(response.try_into()?).await?)
+        return Ok(self.outbound.send(response.try_into()?).await?);
     }
 
     async fn send_room(&mut self, message: ClientMessage) -> Result<()> {

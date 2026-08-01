@@ -9,15 +9,15 @@ pub type RegistryHandle = Arc<Mutex<Registry>>;
 
 pub struct Registry {
     entity_counter: u64,
-    rooms: HashMap<String, RoomMailbox>
+    rooms: HashMap<String, RoomMailbox>,
 }
 
 impl Registry {
     pub fn new() -> Self {
         return Registry {
             entity_counter: 0,
-            rooms: HashMap::new()
-        }
+            rooms: HashMap::new(),
+        };
     }
 
     fn generate_name(&mut self, prefix: &str) -> String {

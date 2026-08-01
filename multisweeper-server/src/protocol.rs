@@ -3,13 +3,9 @@ use tokio_tungstenite::tungstenite::Message;
 
 use crate::room::RoomCode;
 
-pub enum ClientMessage {
+pub enum ClientMessage {}
 
-}
-
-pub enum ServerMessage {
-
-}
+pub enum ServerMessage {}
 
 #[derive(Deserialize)]
 #[serde(tag = "type", content = "json")]
@@ -34,7 +30,7 @@ impl TryFrom<Message> for ClientRequest {
 #[serde(tag = "type", content = "json")]
 pub enum ServerResponse {
     Pong,
-    AdvertiseRooms { rooms: Vec<RoomCode> }
+    AdvertiseRooms { rooms: Vec<RoomCode> },
 }
 
 impl TryInto<Message> for ServerResponse {
@@ -42,7 +38,7 @@ impl TryInto<Message> for ServerResponse {
     fn try_into(self) -> Result<Message, Self::Error> {
         match serde_json::to_string::<ServerResponse>(&self) {
             Ok(res) => Ok(Message::Text(res.into())),
-            Err(e) => Err(e)
+            Err(e) => Err(e),
         }
     }
 }
