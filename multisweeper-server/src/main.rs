@@ -4,7 +4,6 @@ use tokio::{net::{TcpListener, TcpStream}};
 use tokio_tungstenite::accept_async;
 use tracing::{info, warn};
 use triomphe::Arc;
-use std::{env};
 use parking_lot::Mutex;
 
 use crate::{registry::{Registry, RegistryHandle}, session::Session};
@@ -17,7 +16,11 @@ mod session;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about=None)]
 struct Args {
-    #[clap(long, help("Set the port to expose the server on, overrides the $SERVER_PORT environment variable"))]
+    #[clap(
+        long, 
+        default_value("8080"),
+        help("Set the port to expose the server on, overrides the $SERVER_PORT environment variable (default: 8080)")
+    )]
     port: u16
 }
 
@@ -27,11 +30,7 @@ struct Config {
 
 fn read_config() -> Result<Config> {
     let args = Args::parse();
-    let port: u16 = match env::var("SERVER_PORT") {
-        Ok(port) => port.parse()?,
-        Err(_e) => args.port
-    };
-    return Ok(Config { port });
+    return Ok(Config { port: args.port });
 }
 
 #[tracing::instrument]
