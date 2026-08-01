@@ -1,6 +1,7 @@
 use thiserror::Error;
 
-use crate::{board::BoardError, state::GameSnapshot};
+pub use crate::board::BoardError;
+use crate::state::GameSnapshot;
 
 #[derive(Debug, Error)]
 pub enum GameError {
