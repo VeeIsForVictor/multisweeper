@@ -30,8 +30,8 @@ pub enum GameDifficulty {
 
 #[derive(Debug)]
 pub struct Game {
+    pub difficulty: GameDifficulty,
     board: Board,
-    difficulty: GameDifficulty,
     last_state: GameSnapshot,
 }
 

@@ -16,7 +16,7 @@ type BoardResult<T> = Result<T, BoardError>;
 pub enum RevealResult {
     Mine,
     Empty,
-    Number(u8),
+    Number,
     DoNothing,
 }
 
@@ -138,7 +138,7 @@ impl Board {
 
         if cell.adjacent_mines > 0 {
             cell.is_revealed = true;
-            return Ok(RevealResult::Number(cell.adjacent_mines));
+            return Ok(RevealResult::Number);
         }
 
         if cell.is_flagged || cell.is_revealed {
