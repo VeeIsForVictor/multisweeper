@@ -29,7 +29,7 @@ pub enum GameDifficulty {
 pub struct Game {
     board: Board,
     difficulty: GameDifficulty,
-    last_state: Option<GameSnapshot>
+    last_state: GameSnapshot
 }
 
 impl Game {
@@ -43,7 +43,7 @@ impl Game {
         );
         Game {
             board: board.clone(),
-            last_state: None,
+            last_state: GameSnapshot { status: GameStatus::Playing, board: board.expose_cells() },
             difficulty,
         }
     }
@@ -61,16 +61,16 @@ impl Game {
         return self.board.expose_cells()
     }
 
-    fn set_state(&mut self, status: GameStatus) -> GameSnapshot {
+    fn set_state(&mut self, status: GameStatus) -> &GameSnapshot {
         let new_state = GameSnapshot {
             status,
             board: self.expose_board()
         };
-        self.last_state = Some(new_state.clone());
-        return new_state.clone()
+        self.last_state = new_state.clone();
+        return &self.last_state;
     }
 
-    pub fn snapshot(&self) -> &Option<GameSnapshot> {
+    pub fn snapshot(&self) -> &GameSnapshot {
         return &self.last_state;
     }
 
@@ -93,7 +93,7 @@ impl Game {
     }
 
     #[tracing::instrument(skip(self))]
-    pub fn handle_action(&mut self, action: GameAction) -> Result<GameSnapshot, GameError> {
+    pub fn handle_action(&mut self, action: GameAction) -> Result<&GameSnapshot, GameError> {
         match action {
             GameAction::Reveal { x, y } => {
                 let reveal = self.reveal(x, y)?;
@@ -112,6 +112,7 @@ impl Game {
     }
 
     pub fn lose_game(&mut self) {
+        self.set_state(GameStatus::Lost);
         self.board.reveal_all();
     }
 }
