@@ -118,7 +118,7 @@ impl Game {
     }
 
     pub fn lose_game(&mut self) {
-        self.set_state(ActionOutcome::Lost);
         self.board.reveal_all();
+        self.set_state(ActionOutcome::Lost);
     }
 }
