@@ -36,3 +36,13 @@ pub enum ServerResponse {
     Pong,
     AdvertiseRooms { rooms: Vec<RoomCode> }
 }
+
+impl TryInto<Message> for ServerResponse {
+    type Error = serde_json::Error;
+    fn try_into(self) -> Result<Message, Self::Error> {
+        match serde_json::to_string::<ServerResponse>(&self) {
+            Ok(res) => Ok(Message::Text(res.into())),
+            Err(e) => Err(e)
+        }
+    }
+}
