@@ -1,15 +1,13 @@
-pub mod action;
+mod action;
 mod board;
-pub mod error;
-pub mod state;
+mod error;
+mod state;
 
 use board::{Board, RevealResult};
-use error::GameError;
 
-use crate::{
-    action::GameAction,
-    state::{ActionOutcome, GameActionResult, GameCell, GameSnapshot, GameStatus},
-};
+pub use action::GameAction;
+pub use error::*;
+pub use state::*;
 
 type GameResult<T> = Result<T, GameError>;
 
