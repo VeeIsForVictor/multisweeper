@@ -6,8 +6,10 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum BoardError {
-    #[error("coordinate is out of bounds: ({0}, {1})")]
+    #[error("requested coordinate is out of bounds: ({0}, {1})")]
     OutsideOfBounds(u8, u8),
+    #[error("impossible config: {width} by {height} with {mines} mine(s) ")]
+    ImpossibleConfig { width: u8, height: u8, mines: u8 },
 }
 
 type BoardResult<T> = Result<T, BoardError>;
@@ -77,7 +79,14 @@ impl Board {
     }
 
     #[tracing::instrument]
-    pub fn new(width: u8, height: u8, number_of_mines: u8, seed: u64) -> Self {
+    pub fn new(width: u8, height: u8, number_of_mines: u8, seed: u64) -> BoardResult<Self> {
+        if (width * height) < number_of_mines {
+            return Err(BoardError::ImpossibleConfig {
+                width,
+                height,
+                mines: number_of_mines,
+            });
+        }
         let mut cells = vec![];
         let mut created_mines: Vec<(u8, u8)> = vec![];
         let mut rng = Pcg64::seed_from_u64(seed);
@@ -111,7 +120,7 @@ impl Board {
 
         board.evaluate_cells();
 
-        return board;
+        return Ok(board);
     }
 
     pub fn mines_count(&self) -> u8 {

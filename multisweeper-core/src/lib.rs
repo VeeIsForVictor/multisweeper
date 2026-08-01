@@ -37,14 +37,14 @@ pub struct Game {
 
 impl Game {
     #[tracing::instrument]
-    pub fn new(difficulty: GameDifficulty, seed: u64) -> Self {
+    pub fn new(difficulty: GameDifficulty, seed: u64) -> GameResult<Self> {
         let board = Board::new(
             (difficulty as u8) * 4,
             (difficulty as u8) * 4,
             (difficulty as u8) * 3,
             seed,
-        );
-        Game {
+        )?;
+        Ok(Game {
             board: board.clone(),
             last_state: GameSnapshot {
                 status: GameStatus::Playing,
@@ -52,7 +52,7 @@ impl Game {
                 board: board.expose_cells(),
             },
             difficulty,
-        }
+        })
     }
 
     pub fn info(&self) -> GameInfo {
@@ -103,8 +103,10 @@ impl Game {
     #[tracing::instrument(skip(self))]
     pub fn handle_action(&mut self, action: GameAction) -> Result<&GameSnapshot, GameError> {
         match self.last_state.status {
-            GameStatus::Playing => {},
-            GameStatus::NoWinner | GameStatus::Won => return Err(GameError::ConcludedGame(self.last_state.clone())),
+            GameStatus::Playing => {}
+            GameStatus::NoWinner | GameStatus::Won => {
+                return Err(GameError::ConcludedGame(self.last_state.clone()));
+            }
         }
         match action {
             GameAction::Reveal { x, y } => {

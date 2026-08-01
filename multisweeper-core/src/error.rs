@@ -7,5 +7,5 @@ pub enum GameError {
     #[error("board error: {0}")]
     BoardError(#[from] BoardError),
     #[error("game already concluded with state")]
-    ConcludedGame(GameSnapshot)
+    ConcludedGame(GameSnapshot),
 }
