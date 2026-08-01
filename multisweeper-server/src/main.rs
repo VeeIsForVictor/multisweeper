@@ -1,3 +1,5 @@
+use std::println;
+
 use anyhow::Result;
 use clap::Parser;
 use parking_lot::Mutex;
@@ -45,6 +47,7 @@ async fn main() -> Result<()> {
     let registry = Arc::new(Mutex::new(Registry::new()));
     let listener = TcpListener::bind(format!("0.0.0.0:{}", config.port)).await?;
 
+    println!("server is live and listening on port {}", config.port);
     info!("listening on port {}", config.port);
 
     while let Ok((stream, _addr)) = listener.accept().await {
