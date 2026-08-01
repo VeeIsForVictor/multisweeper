@@ -153,7 +153,7 @@ impl Board {
         return Ok(RevealResult::Empty);
     }
 
-    fn reveal_cells_cascade(&mut self, to_reveal: &mut Vec<(u8, u8)>) -> Result<(), BoardError> {
+    fn reveal_cells_cascade(&mut self, to_reveal: &mut Vec<(u8, u8)>) -> BoardResult<()> {
         match to_reveal.pop() {
             None => return Ok(()),
             Some((x, y)) => {
@@ -180,6 +180,14 @@ impl Board {
                 }
             }
         }
+    }
+
+    pub fn expose_cells(&self) -> Vec<Vec<CellView>> {
+        return self.cells.iter().map(
+            |row| row.iter().map(
+                |col| col.to_owned().into()
+            ).collect()
+        ).collect()
     }
 
     pub fn reveal_all(&mut self) {
@@ -235,5 +243,30 @@ impl Cell {
 
     fn is_safe(&self) -> bool {
         return self.is_mine ^ self.is_revealed;
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum CellView {
+    HiddenCell,
+    VisibleCell(u8),
+    FlaggedCell,
+    MinedCell
+}
+
+impl Into<CellView> for Cell {
+    fn into(self) -> CellView {
+        use CellView::*;
+        if self.is_revealed {
+            if self.is_mine {
+                return MinedCell;
+            } else {
+                return VisibleCell(self.adjacent_mines);
+            }
+        } else if self.is_flagged {
+            return FlaggedCell;
+        } else {
+            return HiddenCell;
+        }
     }
 }

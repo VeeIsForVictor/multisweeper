@@ -1,12 +1,15 @@
-#[derive(Debug, Clone)]
-pub enum GameStatus {
-    WON,
-    LOST,
-    PLAYING(String),
-    STALLED,
-}
+pub use crate::board::CellView as GameCell;
 
 #[derive(Debug, Clone)]
-pub struct GameState {
-    status: GameStatus,
+pub struct GameSnapshot {
+    pub status: GameStatus,
+    pub board: Vec<Vec<GameCell>>
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum GameStatus {
+    Won,
+    Lost,
+    Playing,
+    Stalled,
 }
