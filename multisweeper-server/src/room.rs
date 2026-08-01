@@ -1,15 +1,20 @@
-use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::{self, Receiver, Sender};
 
 use crate::protocol::ClientMessage;
 
 pub type RoomCode = String;
-pub type RoomHandle = Receiver<ClientMessage>;
+pub type RoomMailbox = Receiver<ClientMessage>;
+pub type RoomHandle = Sender<ClientMessage>;
 
 pub struct Room {
     code: RoomCode,
+    mailbox: RoomMailbox,
     handle: RoomHandle
 }
 
 impl Room {
-    
+    pub fn new(code: RoomCode) -> Self {
+        let (sender, receiver) = mpsc::channel(10);
+        return Room { code, mailbox: receiver, handle: sender }
+    }
 }

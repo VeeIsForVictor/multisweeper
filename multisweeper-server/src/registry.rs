@@ -3,13 +3,13 @@ use std::collections::HashMap;
 use parking_lot::Mutex;
 use triomphe::Arc;
 
-use crate::room::RoomHandle;
+use crate::room::RoomMailbox;
 
 pub type RegistryHandle = Arc<Mutex<Registry>>;
 
 pub struct Registry {
     entity_counter: u64,
-    rooms: HashMap<String, RoomHandle>
+    rooms: HashMap<String, RoomMailbox>
 }
 
 impl Registry {
@@ -30,7 +30,7 @@ impl Registry {
         self.generate_name("P")
     }
 
-    pub fn register_lobby(&mut self, handle: RoomHandle) -> String {
+    pub fn register_lobby(&mut self, handle: RoomMailbox) -> String {
         let name = self.generate_name("L");
         self.rooms.insert(name.clone(), handle);
         return name;
