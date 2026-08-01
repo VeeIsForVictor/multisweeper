@@ -6,7 +6,10 @@ mod state;
 use board::{Board, RevealResult};
 use error::GameError;
 
-use crate::{action::GameAction, state::{ActionOutcome, GameActionResult, GameCell, GameSnapshot, GameStatus}};
+use crate::{
+    action::GameAction,
+    state::{ActionOutcome, GameActionResult, GameCell, GameSnapshot, GameStatus},
+};
 
 type GameResult<T> = Result<T, GameError>;
 
@@ -29,7 +32,7 @@ pub enum GameDifficulty {
 pub struct Game {
     board: Board,
     difficulty: GameDifficulty,
-    last_state: GameSnapshot
+    last_state: GameSnapshot,
 }
 
 impl Game {
@@ -43,7 +46,11 @@ impl Game {
         );
         Game {
             board: board.clone(),
-            last_state: GameSnapshot { status: GameStatus::Playing, action_result: GameActionResult::Started , board: board.expose_cells() },
+            last_state: GameSnapshot {
+                status: GameStatus::Playing,
+                action_result: GameActionResult::Started,
+                board: board.expose_cells(),
+            },
             difficulty,
         }
     }
@@ -58,14 +65,14 @@ impl Game {
     }
 
     fn expose_board(&self) -> Vec<Vec<GameCell>> {
-        return self.board.expose_cells()
+        return self.board.expose_cells();
     }
 
     fn set_state(&mut self, outcome: ActionOutcome) -> &GameSnapshot {
         let new_state = GameSnapshot {
             status: outcome.into(),
             action_result: outcome.into(),
-            board: self.expose_board()
+            board: self.expose_board(),
         };
         self.last_state = new_state.clone();
         return &self.last_state;
@@ -98,9 +105,7 @@ impl Game {
         match action {
             GameAction::Reveal { x, y } => {
                 let reveal = self.reveal(x, y)?;
-                if ActionOutcome::Playing == reveal
-                    && self.board.is_all_safe_cells_revealed()
-                {
+                if ActionOutcome::Playing == reveal && self.board.is_all_safe_cells_revealed() {
                     return Ok(self.set_state(ActionOutcome::Won));
                 }
                 return Ok(self.set_state(reveal));
@@ -108,7 +113,7 @@ impl Game {
             GameAction::Flag { x, y } => {
                 let flag = self.flag(x, y)?;
                 return Ok(self.set_state(flag));
-            },
+            }
         }
     }
 

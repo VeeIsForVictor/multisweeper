@@ -7,7 +7,7 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum BoardError {
     #[error("coordinate is out of bounds: ({0}, {1})")]
-    OutsideOfBounds(u8, u8)
+    OutsideOfBounds(u8, u8),
 }
 
 type BoardResult<T> = Result<T, BoardError>;
@@ -183,11 +183,11 @@ impl Board {
     }
 
     pub fn expose_cells(&self) -> Vec<Vec<CellView>> {
-        return self.cells.iter().map(
-            |row| row.iter().map(
-                |col| col.to_owned().into()
-            ).collect()
-        ).collect()
+        return self
+            .cells
+            .iter()
+            .map(|row| row.iter().map(|col| col.to_owned().into()).collect())
+            .collect();
     }
 
     pub fn reveal_all(&mut self) {
@@ -251,7 +251,7 @@ pub enum CellView {
     HiddenCell,
     VisibleCell(u8),
     FlaggedCell,
-    MinedCell
+    MinedCell,
 }
 
 impl Into<CellView> for Cell {

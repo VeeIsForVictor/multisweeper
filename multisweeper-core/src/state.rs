@@ -4,14 +4,14 @@ pub use crate::board::CellView as GameCell;
 pub struct GameSnapshot {
     pub status: GameStatus,
     pub action_result: GameActionResult,
-    pub board: Vec<Vec<GameCell>>
+    pub board: Vec<Vec<GameCell>>,
 }
 
 #[derive(Debug, Clone)]
 pub enum GameStatus {
     Won,
     Lost,
-    Playing
+    Playing,
 }
 
 impl From<ActionOutcome> for GameStatus {
@@ -30,7 +30,7 @@ impl From<ActionOutcome> for GameStatus {
 pub enum GameActionResult {
     Applied,
     Stalled,
-    Started
+    Started,
 }
 
 impl From<ActionOutcome> for GameActionResult {
