@@ -7,4 +7,12 @@ edition = "2024"
 anyhow = "1.0.104"
 multisweeper-core = { version = "0.1.0", path = "../multisweeper-core" }
 thiserror = "2.0.19"
+serde = {version = "1.0.228", features=["derive"]}
+serde_json = "1.0.145"
+tokio = {version = "1.53.1", features=["full"]}
+tokio-stream = "0.1.17"
+tokio-tungstenite = "0.28.0"
 tracing = "0.1.44"
+tracing-forest = {version="0.3.0", features=["ansi", "chrono", "tokio"]}
+tracing-futures = "0.2.5"
+tracing-subscriber = {version="0.3.22", features=["env-filter"]}
