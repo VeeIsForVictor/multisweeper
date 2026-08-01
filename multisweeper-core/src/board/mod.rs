@@ -1,0 +1,239 @@
+use std::fmt::Display;
+
+use rand::{RngExt, SeedableRng};
+use rand_pcg::Pcg64;
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum BoardError {
+    #[error("coordinate is out of bounds: ({0}, {1})")]
+    OutsideOfBounds(u8, u8)
+}
+
+type BoardResult<T> = Result<T, BoardError>;
+
+#[derive(Debug)]
+pub enum RevealResult {
+    Mine,
+    Empty,
+    Number(u8),
+    DoNothing,
+}
+
+#[derive(Debug, Clone)]
+pub struct Board {
+    pub width: u8,
+    pub height: u8,
+    pub seed: u64,
+    created_mines: Vec<(u8, u8)>,
+    cells: Vec<Vec<Cell>>,
+}
+
+impl Board {
+    fn is_coordinate_valid(&self, x: u8, y: u8) -> bool {
+        return (0..self.width).contains(&x) && (0..self.height).contains(&y);
+    }
+
+    fn get_cell_mut(&mut self, x: u8, y: u8) -> BoardResult<&mut Cell> {
+        if !self.is_coordinate_valid(x, y) {
+            return Err(BoardError::OutsideOfBounds(x, y));
+        } else {
+            return Ok(&mut self.cells[y as usize][x as usize]);
+        }
+    }
+
+    pub fn is_all_safe_cells_revealed(&self) -> bool {
+        return self
+            .cells
+            .iter()
+            .all(|row| row.iter().all(|cell| cell.is_safe()));
+    }
+
+    fn evaluate_neighbors(&mut self, x: u8, y: u8) {
+        for dy in [-1, 0, 1] {
+            for dx in [-1, 0, 1] {
+                let target_y: isize = dy + y as isize;
+                let target_x: isize = dx + x as isize;
+                if (dx, dy) != (0, 0)
+                    && (self.height > target_y as u8 && target_y >= 0)
+                    && (self.width > target_x as u8 && target_x >= 0)
+                {
+                    self.get_cell_mut(target_x as u8, target_y as u8)
+                        .unwrap()
+                        .adjacent_mines += 1;
+                }
+            }
+        }
+    }
+
+    #[tracing::instrument(skip_all)]
+    fn evaluate_cells(&mut self) {
+        // clone the vector so we don't keep an immutable borrow on self
+        let created_mines = self.created_mines.clone();
+
+        for (row_idx, col_idx) in created_mines {
+            self.evaluate_neighbors(row_idx, col_idx);
+        }
+    }
+
+    #[tracing::instrument]
+    pub fn new(width: u8, height: u8, number_of_mines: u8, seed: u64) -> Self {
+        let mut cells = vec![];
+        let mut created_mines: Vec<(u8, u8)> = vec![];
+        let mut rng = Pcg64::seed_from_u64(seed);
+        while created_mines.len() < number_of_mines.into() {
+            let (x, y) = (rng.random_range(0..width), rng.random_range(0..height));
+
+            // prevent duplicates
+            if created_mines.contains(&(x, y)) {
+                break;
+            }
+
+            created_mines.push((x, y));
+        }
+
+        for y in 0..height {
+            let mut row = vec![];
+            for x in 0..width {
+                let is_mine = created_mines.contains(&(x, y));
+                row.push(Cell::new(is_mine));
+            }
+            cells.push(row);
+        }
+
+        let mut board = Board {
+            width,
+            height,
+            created_mines,
+            cells,
+            seed,
+        };
+
+        board.evaluate_cells();
+
+        return board;
+    }
+
+    pub fn mines_count(&self) -> u8 {
+        self.created_mines.len().try_into().unwrap()
+    }
+
+    #[tracing::instrument(skip(self))]
+    pub fn reveal(&mut self, x: u8, y: u8) -> Result<RevealResult, BoardError> {
+        let get_cell_result = self.get_cell_mut(x, y);
+        let cell: &mut Cell;
+
+        match get_cell_result {
+            Err(e) => {
+                return Err(e);
+            }
+            Ok(cell_ref) => {
+                cell = cell_ref;
+            }
+        }
+
+        if cell.is_mine {
+            return Ok(RevealResult::Mine);
+        }
+
+        if cell.adjacent_mines > 0 {
+            cell.is_revealed = true;
+            return Ok(RevealResult::Number(cell.adjacent_mines));
+        }
+
+        if cell.is_flagged || cell.is_revealed {
+            return Ok(RevealResult::DoNothing);
+        }
+
+        let mut to_reveal = vec![(x, y)];
+        let cascade_result = self.reveal_cells_cascade(&mut to_reveal);
+        if let Err(e) = cascade_result {
+            return Err(e);
+        }
+        return Ok(RevealResult::Empty);
+    }
+
+    fn reveal_cells_cascade(&mut self, to_reveal: &mut Vec<(u8, u8)>) -> Result<(), BoardError> {
+        match to_reveal.pop() {
+            None => return Ok(()),
+            Some((x, y)) => {
+                let get_cell_result = self.get_cell_mut(x, y);
+                match get_cell_result {
+                    Err(e) => Err(e),
+                    Ok(cell) => {
+                        if cell.is_revealed || cell.adjacent_mines > 0 {
+                            cell.is_revealed = true;
+                            return self.reveal_cells_cascade(to_reveal);
+                        }
+                        cell.is_revealed = true;
+                        for dx in [-1, 0, 1] {
+                            let target_x: i8 = dx + x as i8;
+                            for dy in [-1, 0, 1] {
+                                let target_y: i8 = dy + y as i8;
+                                if target_x >= 0 && target_y >= 0 && (dx, dy) != (0, 0) {
+                                    to_reveal.insert(0, (target_x as u8, target_y as u8));
+                                }
+                            }
+                        }
+                        self.reveal_cells_cascade(to_reveal)
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn reveal_all(&mut self) {
+        for row in &mut self.cells {
+            for col in row {
+                col.is_revealed = true;
+            }
+        }
+    }
+
+    #[tracing::instrument(skip(self))]
+    pub fn flag(&mut self, x: u8, y: u8) -> Result<(), BoardError> {
+        match self.get_cell_mut(x, y) {
+            Ok(cell) => Ok(cell.is_flagged = !cell.is_flagged),
+            Err(e) => Err(e),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Cell {
+    pub is_mine: bool,
+    pub adjacent_mines: u8,
+    is_revealed: bool,
+    is_flagged: bool,
+}
+
+impl Display for Cell {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.is_flagged {
+            f.write_str("F")
+        } else if !self.is_revealed {
+            f.write_str("#")
+        } else if self.is_mine {
+            f.write_str("*")
+        } else if self.adjacent_mines > 0 {
+            f.write_fmt(format_args!("{}", self.adjacent_mines))
+        } else {
+            f.write_str(".")
+        }
+    }
+}
+
+impl Cell {
+    fn new(is_mine: bool) -> Self {
+        Cell {
+            is_mine,
+            is_revealed: false,
+            is_flagged: false,
+            adjacent_mines: 0,
+        }
+    }
+
+    fn is_safe(&self) -> bool {
+        return self.is_mine ^ self.is_revealed;
+    }
+}

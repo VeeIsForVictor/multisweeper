@@ -1,14 +1,102 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
+mod action;
+mod board;
+mod error;
+mod outcome;
+mod state;
+mod status;
+
+use board::{ Board, RevealResult};
+
+use crate::action::GameAction;
+
+pub struct GameInfo {
+    pub width: u8,
+    pub height: u8,
+    pub number_of_mines: u8,
+    pub seed: u64,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+#[derive(Debug, Clone, Copy)]
+pub enum GameDifficulty {
+    TEST = 1,
+    EASY = 2,
+    MEDIUM = 4,
+    HARD = 5,
+}
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+#[derive(Debug)]
+pub struct Game {
+    board: Board,
+    difficulty: GameDifficulty,
+}
+
+impl Game {
+    #[tracing::instrument]
+    pub fn new(difficulty: GameDifficulty, seed: u64) -> Self {
+        let board = Board::new(
+            (difficulty as u8) * 4,
+            (difficulty as u8) * 4,
+            (difficulty as u8) * 3,
+            seed,
+        );
+        Game {
+            board: board.clone(),
+            difficulty,
+        }
+    }
+
+    pub fn info(&self) -> GameInfo {
+        return GameInfo {
+            width: self.board.width,
+            height: self.board.height,
+            number_of_mines: self.board.mines_count(),
+            seed: self.board.seed,
+        };
+    }
+
+    #[tracing::instrument(skip(self))]
+    fn reveal(&mut self, x: u8, y: u8) -> Result<GamePhase, GameError> {
+        if !self.board.is_coordinate_valid(x, y) {
+            return Err(GameError);
+        }
+
+        let reveal_result = self.board.reveal(x, y);
+        let Ok(revealed_state) = reveal_result else {
+            return Err(GameError);
+        };
+
+        match revealed_state {
+            RevealResult::Mine => Ok(GamePhase::LOST),
+            RevealResult::DoNothing => Ok(GamePhase::STALLED),
+            _ => Ok(GamePhase::PLAYING(self.board.to_string())),
+        }
+    }
+
+    #[tracing::instrument(skip(self))]
+    fn flag(&mut self, x: u8, y: u8) -> Result<GamePhase, GameError> {
+        match self.board.flag(x, y) {
+            Ok(()) => Ok(GamePhase::PLAYING(self.board.to_string())),
+            Err(_e) => Err(GameError),
+        }
+    }
+
+    #[tracing::instrument(skip(self))]
+    pub fn handle_action(&mut self, action: GameAction) -> Result<GamePhase, GameError> {
+        match action {
+            GameAction::REVEAL { x, y } => {
+                let reveal = self.reveal(x, y);
+                if let Ok(GamePhase::PLAYING(_)) = reveal
+                    && self.board.is_all_safe_cells_revealed()
+                {
+                    return Ok(GamePhase::WON);
+                }
+                return reveal;
+            }
+            GameAction::FLAG { x, y } => self.flag(x, y),
+        }
+    }
+
+    pub fn lose_game(&mut self) {
+        self.board.reveal_all();
     }
 }
