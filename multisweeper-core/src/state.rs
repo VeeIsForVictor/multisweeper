@@ -10,7 +10,7 @@ pub struct GameSnapshot {
 #[derive(Debug, Clone)]
 pub enum GameStatus {
     Won,
-    Lost,
+    NoWinner,
     Playing,
 }
 
