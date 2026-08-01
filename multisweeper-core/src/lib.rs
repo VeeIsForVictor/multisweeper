@@ -1,7 +1,7 @@
-mod action;
+pub mod action;
 mod board;
-mod error;
-mod state;
+pub mod error;
+pub mod state;
 
 use board::{Board, RevealResult};
 use error::GameError;

@@ -182,7 +182,7 @@ impl Board {
         }
     }
 
-    pub fn expose_cells(&self) -> Vec<Vec<CellView>> {
+    pub(crate) fn expose_cells(&self) -> Vec<Vec<CellView>> {
         return self
             .cells
             .iter()
