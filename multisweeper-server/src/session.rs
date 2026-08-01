@@ -1,6 +1,6 @@
 use futures::{StreamExt, stream::{SplitSink, SplitStream}};
 use tokio::{io::split, net::TcpStream, sync::mpsc::{self, Receiver, Sender}};
-use tokio_tungstenite::WebSocketStream;
+use tokio_tungstenite::{WebSocketStream, tungstenite::Message};
 
 use crate::protocol::{ServerMessage, ServerResponse};
 
@@ -8,7 +8,7 @@ pub type PlayerId = String;
 pub type PlayerMailbox = Receiver<ServerMessage>;
 pub type PlayerHandle = Sender<ServerMessage>;
 pub type PlayerOutbound = SplitStream<WebSocketStream<TcpStream>>;
-pub type PlayerInbound = SplitSink<WebSocketStream<TcpStream>, ServerResponse>;
+pub type PlayerInbound = SplitSink<WebSocketStream<TcpStream>, Message>;
 
 pub struct Session {
     id: PlayerId,
