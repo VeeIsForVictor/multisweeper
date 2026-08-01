@@ -102,6 +102,10 @@ impl Game {
 
     #[tracing::instrument(skip(self))]
     pub fn handle_action(&mut self, action: GameAction) -> Result<&GameSnapshot, GameError> {
+        match self.last_state.status {
+            GameStatus::Playing => {},
+            GameStatus::NoWinner | GameStatus::Won => return Err(GameError::ConcludedGame(self.last_state.clone())),
+        }
         match action {
             GameAction::Reveal { x, y } => {
                 let reveal = self.reveal(x, y)?;
