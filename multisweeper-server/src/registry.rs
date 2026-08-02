@@ -3,9 +3,10 @@ use std::collections::HashMap;
 use anyhow::Result;
 use parking_lot::Mutex;
 use thiserror::Error;
+use tokio::sync::oneshot;
 use triomphe::Arc;
 
-use crate::room::{Room, RoomCode, RoomHandle, RoomMailbox};
+use crate::room::{Room, RoomCode, RoomHandle, RoomNotification};
 
 #[derive(Debug, Error)]
 pub enum RegistryError {
@@ -14,6 +15,8 @@ pub enum RegistryError {
 }
 
 pub type RegistryHandle = Arc<Mutex<Registry>>;
+pub type RegistryOneShotRcv = oneshot::Receiver<RoomNotification>;
+pub type RegistryOneShotSnd = oneshot::Sender<RoomNotification>;
 
 pub struct Registry {
     entity_counter: u64,

@@ -63,7 +63,7 @@ async fn accept_connection(stream: TcpStream, registry: RegistryHandle) -> Resul
     let ws_stream = accept_async(stream).await?;
     let id = registry.lock().register_player();
 
-    let mut session = Session::new(id, ws_stream, registry);
+    let session = Session::new(id, ws_stream, registry);
     tokio::spawn(session.handle_connections());
     return Ok(());
 }
