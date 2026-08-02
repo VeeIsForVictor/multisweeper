@@ -23,7 +23,8 @@ pub enum ServerMessage {
 pub enum RegistryMessage {
     CreateLobby(Sender<RoomAddr>),
     RequestLobby{code: RoomCode, reply: Sender<Result<RoomAddr, RegistryError>>},
-    QueryLobbies(Sender<Vec<RoomCode>>)
+    QueryLobbies(Sender<Vec<RoomCode>>),
+    CreatePlayer(Sender<PlayerId>)
 }
 
 #[derive(Deserialize)]
