@@ -124,6 +124,10 @@ impl Registry {
                 let lobbies = self.request_lobbies().iter().map(ToString::to_string).collect();
                 return Ok(Self::handle_reply(reply, lobbies).await);
             },
+            RegistryMessage::CreatePlayer(reply) => {
+                let id = self.register_player();
+                return Ok(Self::handle_reply(reply, id).await);
+            },
         }
     }
 
