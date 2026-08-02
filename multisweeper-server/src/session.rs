@@ -122,7 +122,7 @@ impl Session {
             ClientRequest::CreateRoom => {
                 let (reply_sdr, reply_rcr) = oneshot::channel::<RoomAddr>();
                 self.registry_addr.send(RegistryMessage::CreateLobby(reply_sdr)).await?;
-                let addr = reply_rcr.blocking_recv()?;
+                let addr = reply_rcr.await?;
                 self.room = Some(addr);
                 Ok(self.send_room(PlayerCommand::Join { handle: self.addr.clone() }).await?)
             }
@@ -133,7 +133,7 @@ impl Session {
                 };
                 let (reply_sdr, reply_rcr) = oneshot::channel::<Result<RoomAddr, RegistryError>>();
                 self.registry_addr.send(RegistryMessage::RequestLobby { code: room_code, reply: reply_sdr }).await?;
-                let maybe_lobby_handle = reply_rcr.blocking_recv()?;
+                let maybe_lobby_handle = reply_rcr.await?;
                 match maybe_lobby_handle {
                     Ok(addr) => {
                         self.room = Some(addr);
@@ -149,7 +149,7 @@ impl Session {
             ClientRequest::QueryRooms => {
                 let (reply_sdr, reply_rcr) = oneshot::channel::<Vec<RoomCode>>();
                 self.registry_addr.send(RegistryMessage::QueryLobbies(reply_sdr));
-                let rooms = reply_rcr.blocking_recv()?;
+                let rooms = reply_rcr.await?;
                 Ok(self.send_outbound(ServerResponse::AdvertiseRooms { rooms }).await?)
             },
             ClientRequest::StartGame => todo!(),
