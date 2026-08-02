@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
+use tokio::sync::oneshot::Sender;
 use tokio_tungstenite::tungstenite::Message;
 
-use crate::{room::RoomCode, session::{PlayerAddr, PlayerId}};
+use crate::{registry::RegistryError, room::{RoomAddr, RoomCode}, session::{PlayerAddr, PlayerId}};
 
 pub enum PlayerCommand {
     Join { handle: PlayerAddr },
@@ -17,6 +18,12 @@ pub struct ClientMessage {
 pub enum ServerMessage {
     RoomState { code: RoomCode, owner: PlayerId, players: Vec<PlayerId> },
     GameStarted
+}
+
+pub enum RegistryMessage {
+    CreateLobby(Sender<RoomAddr>),
+    RequestLobby{code: RoomCode, reply: Sender<Result<RoomAddr, RegistryError>>},
+    QueryLobbies(Sender<Vec<RoomCode>>)
 }
 
 #[derive(Deserialize)]
