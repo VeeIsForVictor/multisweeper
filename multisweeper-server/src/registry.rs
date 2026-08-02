@@ -6,7 +6,7 @@ use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 use triomphe::Arc;
 
-use crate::{protocol::RegistryMessage, room::{Room, RoomAddr, RoomCode}};
+use crate::{protocol::registry::RegistryMessage, room::{Room, RoomAddr, RoomCode}};
 
 #[derive(Debug, Error)]
 pub enum RegistryError {

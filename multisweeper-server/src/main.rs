@@ -7,7 +7,7 @@ use tokio_tungstenite::accept_async;
 use tracing::{info, warn};
 
 use crate::{
-    protocol::RegistryMessage, registry::{Registry, RegistryAddr}, session::{PlayerId, Session},
+    protocol::registry::RegistryMessage, registry::{Registry, RegistryAddr}, session::{PlayerId, Session},
 };
 
 mod protocol;

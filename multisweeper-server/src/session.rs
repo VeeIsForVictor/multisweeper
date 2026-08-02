@@ -13,12 +13,12 @@ use tokio_tungstenite::{
 };
 
 use crate::{
-    protocol::{ClientMessage, ClientRequest, PlayerCommand, RegistryMessage::{self, RequestLobby}, ServerMessage, ServerResponse}, registry::{RegistryAddr, RegistryError}, room::{RoomAddr, RoomCode},
+    protocol::{registry::RegistryMessage, room::{PlayerCommand, RoomMessage}, session::SessionMessage, wire::{ClientRequest, ServerResponse}}, registry::{RegistryAddr, RegistryError}, room::{RoomAddr, RoomCode},
 };
 
 pub type PlayerId = String;
-pub type PlayerMailbox = Receiver<ServerMessage>;
-pub type PlayerAddr = Sender<ServerMessage>;
+pub type PlayerMailbox = Receiver<SessionMessage>;
+pub type PlayerAddr = Sender<SessionMessage>;
 pub type PlayerInbound = SplitStream<WebSocketStream<TcpStream>>;
 pub type PlayerOutbound = SplitSink<WebSocketStream<TcpStream>, Message>;
 
@@ -36,7 +36,7 @@ pub enum SessionError {
 
 pub enum SessionEvent {
     Inbound(Option<Result<Message, Error>>),
-    Mailbox(Option<ServerMessage>),
+    Mailbox(Option<SessionMessage>),
 }
 
 pub struct Session {
@@ -109,7 +109,7 @@ impl Session {
         }
     }
 
-    fn receive_mailbox(&mut self, msg: Option<ServerMessage>) -> Result<ServerMessage> {
+    fn receive_mailbox(&mut self, msg: Option<SessionMessage>) -> Result<SessionMessage> {
         match msg {
             Some(msg) => Ok(msg),
             None => Err(SessionError::RoomDropped.into()),
@@ -158,7 +158,7 @@ impl Session {
         }
     }
 
-    async fn handle_mailbox(&mut self, message: ServerMessage) -> Result<()> {
+    async fn handle_mailbox(&mut self, message: SessionMessage) -> Result<()> {
         return Ok(());
     }
 
@@ -169,7 +169,7 @@ impl Session {
     async fn send_room(&mut self, command: PlayerCommand) -> Result<()> {
         match &self.room {
             Some(addr) => Ok(addr.send(
-                ClientMessage {
+                RoomMessage {
                     id: self.id.clone(),
                     command
                 }

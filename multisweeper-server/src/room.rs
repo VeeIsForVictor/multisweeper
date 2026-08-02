@@ -1,11 +1,11 @@
 use anyhow::Result;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
-use crate::{protocol::ClientMessage, registry::RegistryAddr, session::PlayerAddr};
+use crate::{protocol::room::RoomMessage, session::PlayerAddr};
 
 pub type RoomCode = String;
-pub type RoomMailbox = Receiver<ClientMessage>;
-pub type RoomAddr = Sender<ClientMessage>;
+pub type RoomMailbox = Receiver<RoomMessage>;
+pub type RoomAddr = Sender<RoomMessage>;
 
 pub struct Room {
     code: RoomCode,
