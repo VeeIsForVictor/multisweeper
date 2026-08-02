@@ -1,7 +1,7 @@
 use anyhow::Result;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
-use crate::{protocol::ClientMessage, registry::{RegistryAddr, RegistryOneShotSnd}, session::PlayerAddr};
+use crate::{protocol::ClientMessage, registry::RegistryAddr, session::PlayerAddr};
 
 pub type RoomCode = String;
 pub type RoomMailbox = Receiver<ClientMessage>;

@@ -5,8 +5,7 @@ use futures::{
 };
 use thiserror::Error;
 use tokio::{
-    net::TcpStream,
-    sync::mpsc::{self, Receiver, Sender},
+    net::TcpStream, sync::{mpsc::{self, Receiver, Sender}, oneshot},
 };
 use tokio_tungstenite::{
     WebSocketStream,
@@ -14,7 +13,7 @@ use tokio_tungstenite::{
 };
 
 use crate::{
-    protocol::{ClientMessage, ClientRequest, PlayerCommand, ServerMessage, ServerResponse}, registry::RegistryAddr, room::RoomAddr,
+    protocol::{ClientMessage, ClientRequest, PlayerCommand, RegistryMessage::{self, RequestLobby}, ServerMessage, ServerResponse}, registry::{RegistryAddr, RegistryError}, room::{RoomAddr, RoomCode},
 };
 
 pub type PlayerId = String;
@@ -121,7 +120,9 @@ impl Session {
         match request {
             ClientRequest::Ping => Ok(self.send_outbound(ServerResponse::Pong).await?),
             ClientRequest::CreateRoom => {
-                let (new_lobby, addr) = self.registry_addr.lock().register_lobby();
+                let (reply_sdr, reply_rcr) = oneshot::channel::<RoomAddr>();
+                self.registry_addr.send(RegistryMessage::CreateLobby(reply_sdr)).await?;
+                let addr = reply_rcr.blocking_recv()?;
                 self.room = Some(addr);
                 Ok(self.send_room(PlayerCommand::Join { handle: self.addr.clone() }).await?)
             }
@@ -130,7 +131,9 @@ impl Session {
                     Some(_handle) => return Ok(self.send_outbound(ServerResponse::ClientError(SessionError::RoomAlreadyJoined.to_string())).await?),
                     None => (),
                 };
-                let maybe_lobby_handle = self.registry_addr.lock().request_lobby(room_code);
+                let (reply_sdr, reply_rcr) = oneshot::channel::<Result<RoomAddr, RegistryError>>();
+                self.registry_addr.send(RegistryMessage::RequestLobby { code: room_code, reply: reply_sdr }).await?;
+                let maybe_lobby_handle = reply_rcr.blocking_recv()?;
                 match maybe_lobby_handle {
                     Ok(addr) => {
                         self.room = Some(addr);
@@ -144,7 +147,9 @@ impl Session {
                 Ok(self.send_room(PlayerCommand::Leave).await?)
             },
             ClientRequest::QueryRooms => {
-                let rooms = self.registry_addr.lock().request_lobbies().iter().map(|code| code.to_string()).collect();
+                let (reply_sdr, reply_rcr) = oneshot::channel::<Vec<RoomCode>>();
+                self.registry_addr.send(RegistryMessage::QueryLobbies(reply_sdr));
+                let rooms = reply_rcr.blocking_recv()?;
                 Ok(self.send_outbound(ServerResponse::AdvertiseRooms { rooms }).await?)
             },
             ClientRequest::StartGame => todo!(),
