@@ -6,7 +6,10 @@ use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 use triomphe::Arc;
 
-use crate::{protocol::registry::RegistryMessage, room::{Room, RoomAddr, RoomCode}};
+use crate::{
+    protocol::registry::RegistryMessage,
+    room::{Room, RoomAddr, RoomCode},
+};
 
 #[derive(Debug, Error)]
 pub enum RegistryError {
@@ -15,7 +18,7 @@ pub enum RegistryError {
     #[error("all senders dropped")]
     AddrDropped,
     #[error("reply failed")]
-    ReplyFailed
+    ReplyFailed,
 }
 
 pub type RegistryLock = Arc<Mutex<Registry>>;
@@ -25,14 +28,14 @@ pub type RegistryAddr = mpsc::Sender<RegistryMessage>;
 type ReplyHandle<T> = oneshot::Sender<T>;
 
 pub enum RegistryEvent {
-    Mailbox(Option<RegistryMessage>)
+    Mailbox(Option<RegistryMessage>),
 }
 
 pub struct Registry {
     entity_counter: u64,
     rooms: HashMap<String, RoomAddr>,
     mailbox: RegistryMailbox,
-    addr: RegistryAddr
+    addr: RegistryAddr,
 }
 
 impl Registry {
@@ -43,7 +46,7 @@ impl Registry {
             entity_counter: 0,
             rooms: HashMap::new(),
             mailbox,
-            addr
+            addr,
         };
     }
 
@@ -73,7 +76,7 @@ impl Registry {
     fn request_lobby(&mut self, code: RoomCode) -> Result<RoomAddr, RegistryError> {
         match self.rooms.get(&code) {
             Some(handle) => Ok(handle.clone()),
-            None => Err(RegistryError::RoomNotFound(code).into())
+            None => Err(RegistryError::RoomNotFound(code).into()),
         }
     }
 
@@ -84,15 +87,13 @@ impl Registry {
     pub async fn handle_connections(mut self) -> Result<()> {
         match self.event_loop().await {
             Ok(()) => Ok(()),
-            Err(e) => {
-                Err(e)
-            }
+            Err(e) => Err(e),
         }
     }
 
     async fn event_loop(&mut self) -> Result<()> {
         loop {
-            let event = tokio::select! { 
+            let event = tokio::select! {
                 msg = self.mailbox.recv() => RegistryEvent::Mailbox(msg)
             };
 
@@ -117,19 +118,23 @@ impl Registry {
             RegistryMessage::CreateLobby(reply) => {
                 let (_code, addr) = self.register_lobby().await;
                 return Ok(Self::handle_reply(reply, addr).await);
-            },
-            RegistryMessage::RequestLobby{code, reply} => {
+            }
+            RegistryMessage::RequestLobby { code, reply } => {
                 let result = self.request_lobby(code);
                 return Ok(Self::handle_reply(reply, result).await);
-            },
+            }
             RegistryMessage::QueryLobbies(reply) => {
-                let lobbies = self.request_lobbies().iter().map(ToString::to_string).collect();
+                let lobbies = self
+                    .request_lobbies()
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect();
                 return Ok(Self::handle_reply(reply, lobbies).await);
-            },
+            }
             RegistryMessage::CreatePlayer(reply) => {
                 let id = self.register_player();
                 return Ok(Self::handle_reply(reply, id).await);
-            },
+            }
         }
     }
 

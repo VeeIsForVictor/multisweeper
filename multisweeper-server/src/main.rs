@@ -2,12 +2,17 @@ use std::println;
 
 use anyhow::Result;
 use clap::Parser;
-use tokio::{net::{TcpListener, TcpStream}, sync::oneshot};
+use tokio::{
+    net::{TcpListener, TcpStream},
+    sync::oneshot,
+};
 use tokio_tungstenite::accept_async;
 use tracing::{info, warn};
 
 use crate::{
-    protocol::registry::RegistryMessage, registry::{Registry, RegistryAddr}, session::{PlayerId, Session},
+    protocol::registry::RegistryMessage,
+    registry::{Registry, RegistryAddr},
+    session::{PlayerId, Session},
 };
 
 mod protocol;
@@ -62,7 +67,9 @@ async fn main() -> Result<()> {
 async fn accept_connection(stream: TcpStream, registry: RegistryAddr) -> Result<()> {
     let ws_stream = accept_async(stream).await?;
     let (reply_sdr, reply_rcr) = oneshot::channel::<PlayerId>();
-    registry.send(RegistryMessage::CreatePlayer(reply_sdr)).await?;
+    registry
+        .send(RegistryMessage::CreatePlayer(reply_sdr))
+        .await?;
     let id = reply_rcr.await?;
 
     let session = Session::new(id, ws_stream, registry);

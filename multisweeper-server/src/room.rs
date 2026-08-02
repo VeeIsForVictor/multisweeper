@@ -12,7 +12,7 @@ pub struct Room {
     mailbox: RoomMailbox,
     addr: RoomAddr,
     players: Vec<PlayerAddr>,
-    owner: Option<PlayerAddr>
+    owner: Option<PlayerAddr>,
 }
 
 impl Room {
@@ -23,7 +23,7 @@ impl Room {
             mailbox: receiver,
             addr: sender,
             players: Vec::new(),
-            owner: None
+            owner: None,
         };
     }
 
@@ -36,8 +36,6 @@ impl Room {
     }
 
     pub async fn handle_connection(self) -> Result<()> {
-        loop {
-            
-        }
+        loop {}
     }
 }

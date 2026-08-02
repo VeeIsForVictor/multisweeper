@@ -15,7 +15,7 @@ pub enum ClientRequest {
     // Game-related
     StartGame,
     GameAction,
-    GameQuery
+    GameQuery,
 }
 
 impl TryFrom<Message> for ClientRequest {
@@ -35,7 +35,7 @@ pub enum ServerResponse {
     Pong,
     AdvertiseRooms { rooms: Vec<RoomCode> },
     ClientError(String),
-    Message(SessionMessage)
+    Message(SessionMessage),
 }
 
 impl TryInto<Message> for ServerResponse {
