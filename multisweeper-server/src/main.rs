@@ -42,13 +42,16 @@ fn read_config() -> Result<Config> {
 async fn main() -> Result<()> {
     let config = read_config()?;
     let registry = Registry::new();
+    let registry_addr = registry.request_addr();
+    tokio::spawn(registry.handle_connections());
+
     let listener = TcpListener::bind(format!("0.0.0.0:{}", config.port)).await?;
 
     println!("server is live and listening on port {}", config.port);
     info!("listening on port {}", config.port);
 
     while let Ok((stream, _addr)) = listener.accept().await {
-        tokio::spawn(accept_connection(stream, registry.request_addr()));
+        tokio::spawn(accept_connection(stream, registry_addr.clone()));
     }
 
     warn!("terminating server");
