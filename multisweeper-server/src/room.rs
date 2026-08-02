@@ -7,10 +7,6 @@ pub type RoomCode = String;
 pub type RoomMailbox = Receiver<ClientMessage>;
 pub type RoomAddr = Sender<ClientMessage>;
 
-pub enum RoomNotification {
-    Empty
-}
-
 pub struct Room {
     code: RoomCode,
     mailbox: RoomMailbox,
