@@ -6,7 +6,7 @@ use thiserror::Error;
 use tokio::sync::oneshot;
 use triomphe::Arc;
 
-use crate::room::{Room, RoomCode, RoomHandle, RoomNotification};
+use crate::room::{Room, RoomCode, RoomAddr, RoomNotification};
 
 #[derive(Debug, Error)]
 pub enum RegistryError {
@@ -14,13 +14,13 @@ pub enum RegistryError {
     RoomNotFound(String)
 }
 
-pub type RegistryHandle = Arc<Mutex<Registry>>;
+pub type RegistryAddr = Arc<Mutex<Registry>>;
 pub type RegistryOneShotRcv = oneshot::Receiver<RoomNotification>;
 pub type RegistryOneShotSnd = oneshot::Sender<RoomNotification>;
 
 pub struct Registry {
     entity_counter: u64,
-    rooms: HashMap<String, RoomHandle>,
+    rooms: HashMap<String, RoomAddr>,
 }
 
 impl Registry {
@@ -41,14 +41,14 @@ impl Registry {
         self.generate_name("P")
     }
 
-    pub fn register_lobby(&mut self) -> (String, RoomHandle) {
+    pub fn register_lobby(&mut self) -> (String, RoomAddr) {
         let code = self.generate_name("L");
         let room = Room::new(code.clone());
         self.rooms.insert(code.clone(), room.request_handle());
         return (code, room.request_handle());
     }
 
-    pub fn request_lobby(&mut self, code: RoomCode) -> Result<RoomHandle, RegistryError> {
+    pub fn request_lobby(&mut self, code: RoomCode) -> Result<RoomAddr, RegistryError> {
         match self.rooms.get(&code) {
             Some(handle) => Ok(handle.clone()),
             None => Err(RegistryError::RoomNotFound(code).into())

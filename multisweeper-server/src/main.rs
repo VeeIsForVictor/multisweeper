@@ -9,7 +9,7 @@ use tracing::{info, warn};
 use triomphe::Arc;
 
 use crate::{
-    registry::{Registry, RegistryHandle},
+    registry::{Registry, RegistryAddr},
     session::Session,
 };
 
@@ -59,7 +59,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn accept_connection(stream: TcpStream, registry: RegistryHandle) -> Result<()> {
+async fn accept_connection(stream: TcpStream, registry: RegistryAddr) -> Result<()> {
     let ws_stream = accept_async(stream).await?;
     let id = registry.lock().register_player();
 

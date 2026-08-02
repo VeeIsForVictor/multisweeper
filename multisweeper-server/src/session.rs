@@ -14,12 +14,12 @@ use tokio_tungstenite::{
 };
 
 use crate::{
-    protocol::{ClientMessage, ClientRequest, PlayerCommand, ServerMessage, ServerResponse}, registry::RegistryHandle, room::RoomHandle,
+    protocol::{ClientMessage, ClientRequest, PlayerCommand, ServerMessage, ServerResponse}, registry::RegistryAddr, room::RoomAddr,
 };
 
 pub type PlayerId = String;
 pub type PlayerMailbox = Receiver<ServerMessage>;
-pub type PlayerHandle = Sender<ServerMessage>;
+pub type PlayerAddr = Sender<ServerMessage>;
 pub type PlayerInbound = SplitStream<WebSocketStream<TcpStream>>;
 pub type PlayerOutbound = SplitSink<WebSocketStream<TcpStream>, Message>;
 
@@ -43,24 +43,24 @@ pub enum SessionEvent {
 pub struct Session {
     id: PlayerId,
     mailbox: PlayerMailbox,
-    handle: PlayerHandle,
+    addr: PlayerAddr,
     outbound: PlayerOutbound,
     inbound: PlayerInbound,
-    registry: RegistryHandle,
-    room: Option<RoomHandle>,
+    registry_addr: RegistryAddr,
+    room: Option<RoomAddr>,
 }
 
 impl Session {
-    pub fn new(id: PlayerId, stream: WebSocketStream<TcpStream>, registry: RegistryHandle) -> Self {
+    pub fn new(id: PlayerId, stream: WebSocketStream<TcpStream>, registry_addr: RegistryAddr) -> Self {
         let (sender, receiver) = mpsc::channel(10);
         let (sink, source) = stream.split();
         return Session {
             id,
             mailbox: receiver,
-            handle: sender,
+            addr: sender,
             outbound: sink,
             inbound: source,
-            registry,
+            registry_addr,
             room: None,
         };
     }
@@ -69,8 +69,8 @@ impl Session {
         &self.id
     }
 
-    pub fn request_handle(&self) -> PlayerHandle {
-        self.handle.clone()
+    pub fn request_addr(&self) -> PlayerAddr {
+        self.addr.clone()
     }
 
     pub async fn handle_connections(mut self) -> Result<()> {
@@ -121,20 +121,20 @@ impl Session {
         match request {
             ClientRequest::Ping => Ok(self.send_outbound(ServerResponse::Pong).await?),
             ClientRequest::CreateRoom => {
-                let (new_lobby, handle) = self.registry.lock().register_lobby();
-                self.room = Some(handle);
-                Ok(self.send_room(PlayerCommand::Join { handle: self.handle.clone() }).await?)
+                let (new_lobby, addr) = self.registry_addr.lock().register_lobby();
+                self.room = Some(addr);
+                Ok(self.send_room(PlayerCommand::Join { handle: self.addr.clone() }).await?)
             }
             ClientRequest::JoinRoom { room_code } => {
                 match &self.room {
                     Some(_handle) => return Ok(self.send_outbound(ServerResponse::ClientError(SessionError::RoomAlreadyJoined.to_string())).await?),
                     None => (),
                 };
-                let maybe_lobby_handle = self.registry.lock().request_lobby(room_code);
+                let maybe_lobby_handle = self.registry_addr.lock().request_lobby(room_code);
                 match maybe_lobby_handle {
-                    Ok(handle) => {
-                        self.room = Some(handle);
-                        self.send_room(PlayerCommand::Join { handle: self.handle.clone() }).await?
+                    Ok(addr) => {
+                        self.room = Some(addr);
+                        self.send_room(PlayerCommand::Join { handle: self.addr.clone() }).await?
                     },
                     Err(e) => self.send_outbound(ServerResponse::ClientError(e.to_string())).await?,
                 }
@@ -144,7 +144,7 @@ impl Session {
                 Ok(self.send_room(PlayerCommand::Leave).await?)
             },
             ClientRequest::QueryRooms => {
-                let rooms = self.registry.lock().request_lobbies().iter().map(|code| code.to_string()).collect();
+                let rooms = self.registry_addr.lock().request_lobbies().iter().map(|code| code.to_string()).collect();
                 Ok(self.send_outbound(ServerResponse::AdvertiseRooms { rooms }).await?)
             },
             ClientRequest::StartGame => todo!(),
@@ -163,7 +163,7 @@ impl Session {
 
     async fn send_room(&mut self, command: PlayerCommand) -> Result<()> {
         match &self.room {
-            Some(handle) => Ok(handle.send(
+            Some(addr) => Ok(addr.send(
                 ClientMessage {
                     id: self.id.clone(),
                     command

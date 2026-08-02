@@ -1,11 +1,11 @@
 use anyhow::Result;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
-use crate::{protocol::ClientMessage, registry::{RegistryHandle, RegistryOneShotSnd}, session::PlayerHandle};
+use crate::{protocol::ClientMessage, registry::{RegistryAddr, RegistryOneShotSnd}, session::PlayerAddr};
 
 pub type RoomCode = String;
 pub type RoomMailbox = Receiver<ClientMessage>;
-pub type RoomHandle = Sender<ClientMessage>;
+pub type RoomAddr = Sender<ClientMessage>;
 
 pub enum RoomNotification {
     Empty
@@ -14,9 +14,9 @@ pub enum RoomNotification {
 pub struct Room {
     code: RoomCode,
     mailbox: RoomMailbox,
-    handle: RoomHandle,
-    players: Vec<PlayerHandle>,
-    owner: Option<PlayerHandle>
+    addr: RoomAddr,
+    players: Vec<PlayerAddr>,
+    owner: Option<PlayerAddr>
 }
 
 impl Room {
@@ -25,7 +25,7 @@ impl Room {
         return Room {
             code,
             mailbox: receiver,
-            handle: sender,
+            addr: sender,
             players: Vec::new(),
             owner: None
         };
@@ -35,8 +35,8 @@ impl Room {
         &self.code
     }
 
-    pub fn request_handle(&self) -> RoomHandle {
-        self.handle.clone()
+    pub fn request_handle(&self) -> RoomAddr {
+        self.addr.clone()
     }
 
     pub fn handle_connection(&mut self) -> Result<()> {

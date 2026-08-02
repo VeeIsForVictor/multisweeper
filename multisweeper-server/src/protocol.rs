@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
 use tokio_tungstenite::tungstenite::Message;
 
-use crate::{room::RoomCode, session::{PlayerHandle, PlayerId}};
+use crate::{room::RoomCode, session::{PlayerAddr, PlayerId}};
 
 pub enum PlayerCommand {
-    Join { handle: PlayerHandle },
+    Join { handle: PlayerAddr },
     Leave
 }
 
