@@ -57,11 +57,13 @@ impl Registry {
         self.generate_name("P")
     }
 
-    fn register_lobby(&mut self) -> (String, RoomAddr) {
+    async fn register_lobby(&mut self) -> (String, RoomAddr) {
         let code = self.generate_name("L");
         let room = Room::new(code.clone());
-        self.rooms.insert(code.clone(), room.request_handle());
-        return (code, room.request_handle());
+        let room_handle = &room.request_handle();
+        tokio::spawn(room.handle_connection());
+        self.rooms.insert(code.clone(), room_handle.clone());
+        return (code, room_handle.clone());
     }
 
     pub fn request_addr(&self) -> RegistryAddr {
@@ -113,7 +115,7 @@ impl Registry {
     async fn handle_mailbox(&mut self, msg: RegistryMessage) -> Result<()> {
         match msg {
             RegistryMessage::CreateLobby(reply) => {
-                let (_code, addr) = self.register_lobby();
+                let (_code, addr) = self.register_lobby().await;
                 return Ok(Self::handle_reply(reply, addr).await);
             },
             RegistryMessage::RequestLobby{code, reply} => {

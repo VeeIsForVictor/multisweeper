@@ -35,7 +35,7 @@ impl Room {
         self.addr.clone()
     }
 
-    pub fn handle_connection(&mut self) -> Result<()> {
+    pub async fn handle_connection(self) -> Result<()> {
         loop {
             
         }
