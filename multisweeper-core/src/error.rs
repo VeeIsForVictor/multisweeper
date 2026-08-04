@@ -1,9 +1,10 @@
+use serde::Serialize;
 use thiserror::Error;
 
 pub use crate::board::BoardError;
 use crate::state::GameSnapshot;
 
-#[derive(Debug, Clone, Error)]
+#[derive(Serialize, Debug, Clone, Error)]
 pub enum GameError {
     #[error("board error: {0}")]
     BoardError(#[from] BoardError),

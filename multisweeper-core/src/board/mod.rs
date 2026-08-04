@@ -1,10 +1,11 @@
 use std::fmt::Display;
+use serde::Serialize;
 
 use rand::{RngExt, SeedableRng};
 use rand_pcg::Pcg64;
 use thiserror::Error;
 
-#[derive(Debug, Clone, Error)]
+#[derive(Serialize, Debug, Clone, Error)]
 pub enum BoardError {
     #[error("requested coordinate is out of bounds: ({0}, {1})")]
     OutsideOfBounds(u8, u8),
@@ -255,7 +256,7 @@ impl Cell {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Debug, Clone)]
 pub enum CellView {
     HiddenCell,
     VisibleCell(u8),
