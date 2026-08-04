@@ -93,7 +93,10 @@ impl Room {
             match event {
                 RoomEvent::Session(msg) => {
                     let msg = self.receive_mailbox(msg)?;
-                    self.handle_mailbox(msg).await?
+                    match self.handle_mailbox(msg).await {
+                        Ok(()) => continue,
+                        Err(mut remainder) => return Err(remainder.pop().unwrap().into()),
+                    }
                 }
             }
         }
