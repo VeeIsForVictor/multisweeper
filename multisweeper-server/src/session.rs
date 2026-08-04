@@ -43,6 +43,8 @@ pub enum SessionError {
     RoomDropped,
     #[error("already joined a room")]
     RoomAlreadyJoined,
+    #[error("no room joined")]
+    NoRoomJoined
 }
 
 pub enum SessionEvent {
@@ -184,14 +186,26 @@ impl Session {
             ClientRequest::LeaveRoom => Ok(self.send_room(PlayerCommand::Leave).await?),
             ClientRequest::QueryRooms => {
                 let (reply_sdr, reply_rcr) = oneshot::channel::<Vec<RoomCode>>();
-                self.registry_addr
+                let _ = self.registry_addr
                     .send(RegistryMessage::QueryLobbies(reply_sdr));
                 let rooms = reply_rcr.await?;
                 Ok(self
                     .send_outbound(ServerResponse::AdvertiseRooms { rooms })
                     .await?)
             }
-            ClientRequest::StartGame => todo!(),
+            ClientRequest::StartGame => {
+                let response = match &self.room {
+                    None => ServerResponse::ClientError(SessionError::NoRoomJoined.to_string()),
+                    Some(room) => {
+                        match room.send(RoomMessage { id: self.id.clone(), command: PlayerCommand::StartGame }).await {
+                            Ok(_) => return Ok(()),
+                            Err(_) => ServerResponse::ClientError(SessionError::RoomDropped.to_string()),
+                        }
+                    }
+                };
+                self.send_outbound(response).await?;
+                Ok(())
+            },
             ClientRequest::GameAction => todo!(),
             ClientRequest::GameQuery => todo!(),
         }
