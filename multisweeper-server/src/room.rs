@@ -1,6 +1,7 @@
 use std::{collections::HashMap, todo};
 
 use anyhow::Result;
+use multisweeper_core::Game;
 use thiserror::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
@@ -28,6 +29,7 @@ pub struct Room {
     addr: RoomAddr,
     players: HashMap<PlayerId, PlayerAddr>,
     owner: Option<PlayerId>,
+    game: Option<Game>
 }
 
 pub struct RoomState {
@@ -49,6 +51,7 @@ impl Room {
             addr: sender,
             players: HashMap::new(),
             owner: None,
+            game: None
         };
     }
 
@@ -113,14 +116,21 @@ impl Room {
         let player_id = msg.id;
         match msg.command {
             PlayerCommand::Join { handle } => {
-                self.register_player(player_id, handle.clone());
+                if let None = self.game {
+                    self.register_player(player_id, handle.clone());
+                } else {
+                    let _ = handle.send(SessionMessage::Kicked { reason: "game has already started".to_string() }).await;
+                }
             },
             PlayerCommand::Leave => {
                 let addr = match self.drop_player(&player_id).await {
                     Ok(addr) => addr,
                     Err(_) => return Ok(())
                 };
-                let _ = addr.send(SessionMessage::Kicked);
+                let _ = addr.send(SessionMessage::Kicked { reason: "player left".to_string() });
+            },
+            PlayerCommand::StartGame => {
+
             },
         }
         Ok(match self.broadcast_state().await {
@@ -144,7 +154,7 @@ impl Room {
                             Ok(addr) => addr,
                             Err(_) => continue
                         };
-                        let _ = addr.send(SessionMessage::Kicked).await;
+                        let _ = addr.send(SessionMessage::Kicked { reason: "player dropped".to_string() }).await;
                     }
                     let _ = self.broadcast_state().await;
                 }

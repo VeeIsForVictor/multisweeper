@@ -9,7 +9,9 @@ pub enum SessionMessage {
         owner: Option<PlayerId>,
         players: Vec<PlayerId>,
     },
-    Kicked,
+    Kicked {
+        reason: String
+    },
     GameStarted,
 }
 
