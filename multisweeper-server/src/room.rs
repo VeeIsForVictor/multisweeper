@@ -115,15 +115,18 @@ impl Room {
             PlayerCommand::Join { handle } => {
                 self.register_player(player_id, handle.clone());
             },
-            PlayerCommand::Leave => todo!(),
+            PlayerCommand::Leave => {
+
+            },
         }
         Ok(match self.broadcast_state().await {
             Ok(()) => (),
             Err(errs) => {
+                let mut to_drop = Vec::new();
                 let remainder = errs.iter().filter_map(|err| {
                     match err {
                         RoomError::PlayerDropped(id) => {
-                            self.drop_player(id);
+                            to_drop.push(id);
                             return None;
                         },
                         _ => return Some(err)
@@ -131,6 +134,15 @@ impl Room {
                 }).cloned().collect::<Vec<RoomError>>();
                 if remainder.len() > 0 {
                     return Err(remainder);
+                } else {
+                    for id in to_drop {
+                        let addr = match self.drop_player(id).await {
+                            Ok(addr) => addr,
+                            Err(_) => continue
+                        };
+                        let _ = addr.send(SessionMessage::Kicked).await;
+                    }
+                    let _ = self.broadcast_state().await;
                 }
             },
         })

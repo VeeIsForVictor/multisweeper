@@ -6,7 +6,7 @@ use crate::{room::{RoomCode, RoomState}, session::PlayerId};
 pub enum SessionMessage {
     RoomState {
         code: RoomCode,
-        owner: PlayerId,
+        owner: Option<PlayerId>,
         players: Vec<PlayerId>,
     },
     Kicked,
