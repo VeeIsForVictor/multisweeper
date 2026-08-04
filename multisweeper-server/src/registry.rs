@@ -21,7 +21,6 @@ pub enum RegistryError {
     ReplyFailed,
 }
 
-pub type RegistryLock = Arc<Mutex<Registry>>;
 pub type RegistryMailbox = mpsc::Receiver<RegistryMessage>;
 pub type RegistryAddr = mpsc::Sender<RegistryMessage>;
 
