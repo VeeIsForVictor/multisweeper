@@ -1,7 +1,8 @@
 use std::{collections::HashMap, todo};
 
 use anyhow::Result;
-use multisweeper_core::Game;
+use multisweeper_core::{Game, GameDifficulty, GameError, GameSnapshot};
+use rand::random;
 use thiserror::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
@@ -20,7 +21,9 @@ pub enum RoomError {
     #[error("no such player {0}")]
     NoPlayerFound(PlayerId),
     #[error("no players remaining")]
-    AllPlayersDropped
+    AllPlayersDropped,
+    #[error("game error: {0}")]
+    Game(#[from] GameError)
 }
 
 pub struct Room {
@@ -35,7 +38,8 @@ pub struct Room {
 pub struct RoomState {
     pub code: RoomCode,
     pub players: Vec<PlayerId>,
-    pub owner: Option<PlayerId>
+    pub owner: Option<PlayerId>,
+    pub game: Option<GameSnapshot>
 }
 
 enum RoomEvent {
@@ -55,6 +59,18 @@ impl Room {
         };
     }
 
+    fn start_game(&mut self, requestor_id: PlayerId, difficulty: GameDifficulty) -> Result<(), GameError> {
+        if Some(requestor_id) != self.owner {
+            
+        }
+        let game = match Game::new(difficulty, random()) {
+            Ok(game) => game,
+            Err(e) => return Err(e),
+        };
+        self.game = Some(game);
+        Ok(())
+    }
+
     pub fn code(&self) -> &RoomCode {
         &self.code
     }
@@ -67,7 +83,11 @@ impl Room {
         return Ok(RoomState { 
             code: self.code().to_string(), 
             players: self.players.keys().map(ToString::to_string).collect(), 
-            owner: self.owner.to_owned()
+            owner: self.owner.to_owned(),
+            game: match &self.game {
+                Some(game) => Some(game.snapshot().clone()),
+                None => None,
+            }
         })
     }
 
@@ -129,8 +149,8 @@ impl Room {
                 };
                 let _ = addr.send(SessionMessage::Kicked { reason: "player left".to_string() });
             },
-            PlayerCommand::StartGame => {
-                todo!();
+            PlayerCommand::StartGame { difficulty } => {
+                self.start_game(player_id, difficulty);
             },
         }
         Ok(match self.broadcast_state().await {

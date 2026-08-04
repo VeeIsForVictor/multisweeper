@@ -193,11 +193,11 @@ impl Session {
                     .send_outbound(ServerResponse::AdvertiseRooms { rooms })
                     .await?)
             }
-            ClientRequest::StartGame => {
+            ClientRequest::StartGame { difficulty } => {
                 let response = match &self.room {
                     None => ServerResponse::ClientError(SessionError::NoRoomJoined.to_string()),
                     Some(room) => {
-                        match room.send(RoomMessage { id: self.id.clone(), command: PlayerCommand::StartGame }).await {
+                        match room.send(RoomMessage { id: self.id.clone(), command: PlayerCommand::StartGame { difficulty: difficulty.into() }}).await {
                             Ok(_) => return Ok(()),
                             Err(_) => ServerResponse::ClientError(SessionError::RoomDropped.to_string()),
                         }

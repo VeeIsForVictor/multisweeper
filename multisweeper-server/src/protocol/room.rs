@@ -1,9 +1,11 @@
+use multisweeper_core::GameDifficulty;
+
 use crate::session::{PlayerAddr, PlayerId};
 
 pub enum PlayerCommand {
     Join { handle: PlayerAddr },
     Leave,
-    StartGame
+    StartGame { difficulty: GameDifficulty }
 }
 
 pub struct RoomMessage {
