@@ -130,7 +130,7 @@ impl Room {
                 let _ = addr.send(SessionMessage::Kicked { reason: "player left".to_string() });
             },
             PlayerCommand::StartGame => {
-
+                todo!();
             },
         }
         Ok(match self.broadcast_state().await {
