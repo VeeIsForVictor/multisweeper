@@ -1,13 +1,24 @@
 use serde::Serialize;
 
-use crate::{room::RoomCode, session::PlayerId};
+use crate::{room::{RoomCode, RoomState}, session::PlayerId};
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub enum SessionMessage {
     RoomState {
         code: RoomCode,
         owner: PlayerId,
         players: Vec<PlayerId>,
     },
+    Kicked,
     GameStarted,
+}
+
+impl From<RoomState> for SessionMessage {
+    fn from(value: RoomState) -> Self {
+        return SessionMessage::RoomState {
+            code: value.code,
+            owner: value.owner,
+            players: value.players
+        };
+    }
 }
