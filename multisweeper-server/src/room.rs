@@ -116,7 +116,11 @@ impl Room {
                 self.register_player(player_id, handle.clone());
             },
             PlayerCommand::Leave => {
-
+                let addr = match self.drop_player(&player_id).await {
+                    Ok(addr) => addr,
+                    Err(_) => return Ok(())
+                };
+                let _ = addr.send(SessionMessage::Kicked);
             },
         }
         Ok(match self.broadcast_state().await {
