@@ -3,7 +3,7 @@ use thiserror::Error;
 pub use crate::board::BoardError;
 use crate::state::GameSnapshot;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error)]
 pub enum GameError {
     #[error("board error: {0}")]
     BoardError(#[from] BoardError),

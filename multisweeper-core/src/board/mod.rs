@@ -4,7 +4,7 @@ use rand::{RngExt, SeedableRng};
 use rand_pcg::Pcg64;
 use thiserror::Error;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error)]
 pub enum BoardError {
     #[error("requested coordinate is out of bounds: ({0}, {1})")]
     OutsideOfBounds(u8, u8),
