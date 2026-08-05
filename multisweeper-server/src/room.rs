@@ -1,4 +1,4 @@
-use std::{collections::HashMap, todo};
+use std::{collections::HashMap, println, todo};
 
 use anyhow::Result;
 use multisweeper_core::{Game, GameDifficulty, GameError, GameSnapshot};
@@ -250,7 +250,7 @@ impl Room {
         
         return match addr.send(msg).await {
             Ok(()) => Ok(()),
-            Err(e) => Err(RoomError::PlayerDropped(id.clone()).into())
+            Err(_e) => Err(RoomError::PlayerDropped(id.clone()).into())
         }
     }
 }

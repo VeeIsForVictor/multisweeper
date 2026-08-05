@@ -1,3 +1,5 @@
+use std::println;
+
 use anyhow::Result;
 use futures::{
     SinkExt, StreamExt,
@@ -187,7 +189,7 @@ impl Session {
             ClientRequest::QueryRooms => {
                 let (reply_sdr, reply_rcr) = oneshot::channel::<Vec<RoomCode>>();
                 let _ = self.registry_addr
-                    .send(RegistryMessage::QueryLobbies(reply_sdr));
+                    .send(RegistryMessage::QueryLobbies(reply_sdr)).await;
                 let rooms = reply_rcr.await?;
                 Ok(self
                     .send_outbound(ServerResponse::AdvertiseRooms { rooms })

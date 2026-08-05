@@ -49,7 +49,7 @@ impl TryFrom<Message> for ClientRequest {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(tag = "type", content = "payload")]
 pub enum ServerResponse {
     Pong,

@@ -3,7 +3,7 @@ use serde::Serialize;
 
 use crate::{room::{RoomCode, RoomState}, session::PlayerId};
 
-#[derive(Serialize, Clone)]
+#[derive(Debug, Serialize, Clone)]
 pub enum SessionMessage {
     RoomState {
         code: RoomCode,
