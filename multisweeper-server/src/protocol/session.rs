@@ -9,7 +9,7 @@ pub enum SessionMessage {
         code: RoomCode,
         owner: Option<PlayerId>,
         players: Vec<PlayerId>,
-        game: GameSnapshot
+        game: Option<GameSnapshot>
     },
     Kicked {
         reason: String

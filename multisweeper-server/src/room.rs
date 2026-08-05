@@ -134,6 +134,7 @@ impl Room {
 
     async fn handle_mailbox(&mut self, msg: RoomMessage) -> Result<(), Vec<RoomError>> {
         let player_id = msg.id;
+        let mut errs = Vec::new();
         match msg.command {
             PlayerCommand::Join { handle } => {
                 if let None = self.game {
@@ -150,36 +151,44 @@ impl Room {
                 let _ = addr.send(SessionMessage::Kicked { reason: "player left".to_string() });
             },
             PlayerCommand::StartGame { difficulty } => {
-                self.start_game(player_id, difficulty);
+                match self.start_game(player_id, difficulty) {
+                    Ok(_) => (),
+                    Err(e) => errs.push(RoomError::Game(e)),
+                };
             },
         }
-        Ok(match self.broadcast_state().await {
+        
+        match self.broadcast_state().await {
             Ok(()) => (),
-            Err(errs) => {
-                let mut to_drop = Vec::new();
-                let remainder = errs.iter().filter_map(|err| {
-                    match err {
-                        RoomError::PlayerDropped(id) => {
-                            to_drop.push(id);
-                            return None;
-                        },
-                        _ => return Some(err)
-                    }
-                }).cloned().collect::<Vec<RoomError>>();
-                if remainder.len() > 0 {
-                    return Err(remainder);
-                } else {
-                    for id in to_drop {
-                        let addr = match self.drop_player(id).await {
-                            Ok(addr) => addr,
-                            Err(_) => continue
-                        };
-                        let _ = addr.send(SessionMessage::Kicked { reason: "player dropped".to_string() }).await;
-                    }
-                    let _ = self.broadcast_state().await;
+            Err(mut broadcast_errs) => errs.append(&mut broadcast_errs),
+        }
+
+        if errs.len() > 0 {
+            let mut to_drop = Vec::new();
+            let remainder = errs.iter().filter_map(|err| {
+                match err {
+                    RoomError::PlayerDropped(id) => {
+                        to_drop.push(id);
+                        return None;
+                    },
+                    _ => return Some(err)
                 }
-            },
-        })
+            }).cloned().collect::<Vec<RoomError>>();
+            if remainder.len() > 0 {
+                return Err(remainder);
+            } else {
+                for id in to_drop {
+                    let addr = match self.drop_player(id).await {
+                        Ok(addr) => addr,
+                        Err(_) => continue
+                    };
+                    let _ = addr.send(SessionMessage::Kicked { reason: "player dropped".to_string() }).await;
+                }
+                let _ = self.broadcast_state().await;
+            };
+        }
+
+        Ok(())
     }
 
     async fn register_new_owner(&mut self) -> Result<PlayerId, RoomError> {
