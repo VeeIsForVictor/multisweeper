@@ -214,7 +214,15 @@ impl Session {
     }
 
     async fn handle_mailbox(&mut self, message: SessionMessage) -> Result<()> {
-        return Ok(());
+        match message {
+            SessionMessage::RoomState { code: _, owner: _, players: _, game: _ } => {
+                self.send_outbound(ServerResponse::Message(message)).await?;
+            },
+            SessionMessage::Kicked { reason } => todo!(),
+            SessionMessage::GameStarted => todo!(),
+        }
+
+        Ok(())
     }
 
     async fn send_outbound(&mut self, response: ServerResponse) -> Result<()> {
