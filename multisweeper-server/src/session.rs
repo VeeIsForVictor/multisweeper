@@ -70,7 +70,7 @@ impl Session {
     ) -> Self {
         let (sender, receiver) = mpsc::channel(10);
         let (sink, source) = stream.split();
-        return Session {
+        Session {
             id,
             mailbox: receiver,
             addr: sender,
@@ -78,7 +78,7 @@ impl Session {
             inbound: source,
             registry_addr,
             room: None,
-        };
+        }
     }
 
     pub fn id(&self) -> &str {
@@ -93,7 +93,7 @@ impl Session {
         match self.event_loop().await {
             Ok(()) => Ok(()),
             Err(e) => {
-                self.terminate();
+                self.terminate().await;
                 Err(e)
             }
         }
@@ -150,16 +150,13 @@ impl Session {
                     .await?)
             }
             ClientRequest::JoinRoom { room_code } => {
-                match &self.room {
-                    Some(_handle) => {
-                        return Ok(self
-                            .send_outbound(ServerResponse::ClientError(
-                                SessionError::RoomAlreadyJoined.to_string(),
-                            ))
-                            .await?);
-                    }
-                    None => (),
-                };
+                if self.room.is_some() {
+                    return self
+                        .send_outbound(ServerResponse::ClientError(
+                            SessionError::RoomAlreadyJoined.to_string(),
+                        ))
+                        .await;
+                }
                 let (reply_sdr, reply_rcr) = oneshot::channel::<Result<RoomAddr, RegistryError>>();
                 self.registry_addr
                     .send(RegistryMessage::RequestLobby {
@@ -185,11 +182,11 @@ impl Session {
             }
             ClientRequest::LeaveRoom => {
                 if self.room.is_none() {
-                    return Ok(self
+                    return self
                         .send_outbound(ServerResponse::ClientError(
                             SessionError::NoRoomJoined.to_string(),
                         ))
-                        .await?);
+                        .await;
                 }
                 self.send_room(PlayerCommand::Leave).await?;
                 Ok(())
@@ -230,11 +227,11 @@ impl Session {
             }
             ClientRequest::GameAction { action } => {
                 if self.room.is_none() {
-                    return Ok(self
+                    return self
                         .send_outbound(ServerResponse::ClientError(
                             SessionError::NoRoomJoined.to_string(),
                         ))
-                        .await?);
+                        .await;
                 }
                 self.send_room(PlayerCommand::GameAction {
                     action: action.into(),
@@ -244,11 +241,11 @@ impl Session {
             }
             ClientRequest::GameQuery => {
                 if self.room.is_none() {
-                    return Ok(self
+                    return self
                         .send_outbound(ServerResponse::ClientError(
                             SessionError::NoRoomJoined.to_string(),
                         ))
-                        .await?);
+                        .await;
                 }
                 self.send_room(PlayerCommand::GameQuery).await?;
                 Ok(())
@@ -284,7 +281,8 @@ impl Session {
     }
 
     async fn send_outbound(&mut self, response: ServerResponse) -> Result<()> {
-        return Ok(self.outbound.send(response.try_into()?).await?);
+        self.outbound.send(response.try_into()?).await?;
+        Ok(())
     }
 
     async fn send_room(&mut self, command: PlayerCommand) -> Result<()> {
@@ -299,7 +297,7 @@ impl Session {
         }
     }
 
-    fn terminate(mut self) {
-        let _ = self.outbound.close();
+    async fn terminate(mut self) {
+        let _ = self.outbound.close().await;
     }
 }

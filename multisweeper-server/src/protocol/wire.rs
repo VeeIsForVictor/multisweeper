@@ -43,14 +43,14 @@ pub enum ClientDifficulty {
     Hard,
 }
 
-impl Into<GameDifficulty> for ClientDifficulty {
-    fn into(self) -> GameDifficulty {
-        return match self {
+impl From<ClientDifficulty> for GameDifficulty {
+    fn from(value: ClientDifficulty) -> Self {
+        match value {
             ClientDifficulty::Test => GameDifficulty::TEST,
             ClientDifficulty::Easy => GameDifficulty::EASY,
             ClientDifficulty::Medium => GameDifficulty::MEDIUM,
             ClientDifficulty::Hard => GameDifficulty::HARD,
-        };
+        }
     }
 }
 

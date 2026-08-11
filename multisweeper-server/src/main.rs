@@ -34,7 +34,7 @@ struct Config {
 
 fn read_config() -> Result<Config> {
     let args = Args::parse();
-    return Ok(Config { port: args.port });
+    Ok(Config { port: args.port })
 }
 
 #[tracing::instrument]
@@ -69,5 +69,5 @@ async fn accept_connection(stream: TcpStream, registry: RegistryAddr) -> Result<
 
     let session = Session::new(id, ws_stream, registry);
     tokio::spawn(session.handle_connections());
-    return Ok(());
+    Ok(())
 }

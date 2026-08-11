@@ -61,14 +61,14 @@ enum RoomEvent {
 impl Room {
     pub fn new(code: RoomCode) -> Self {
         let (sender, receiver) = mpsc::channel(10);
-        return Room {
+        Room {
             code,
             mailbox: receiver,
             addr: sender,
             players: HashMap::new(),
             owner: None,
             game: None,
-        };
+        }
     }
 
     fn start_game(
@@ -95,19 +95,16 @@ impl Room {
     }
 
     pub fn state(&self) -> Result<RoomState, RoomError> {
-        return Ok(RoomState {
+        Ok(RoomState {
             code: self.code().to_string(),
             players: self.players.keys().map(ToString::to_string).collect(),
             owner: self.owner.to_owned(),
-            game: match &self.game {
-                Some(game) => Some(game.snapshot().clone()),
-                None => None,
-            },
-        });
+            game: self.game.as_ref().map(|game| game.snapshot().clone()),
+        })
     }
 
     fn register_player(&mut self, id: PlayerId, addr: PlayerAddr) {
-        if let None = self.owner {
+        if self.owner.is_none() {
             self.owner = Some(id.clone());
         }
         self.players.insert(id, addr);
@@ -150,7 +147,7 @@ impl Room {
         let mut errs = Vec::new();
         match msg.command {
             PlayerCommand::Join { handle } => {
-                if let None = self.game {
+                if self.game.is_none() {
                     self.register_player(player_id, handle.clone());
                 } else {
                     let _ = handle
@@ -165,9 +162,11 @@ impl Room {
                     Ok(addr) => addr,
                     Err(_) => return Ok(()),
                 };
-                let _ = addr.send(SessionMessage::Kicked {
-                    reason: "player left".to_string(),
-                });
+                let _ = addr
+                    .send(SessionMessage::Kicked {
+                        reason: "player left".to_string(),
+                    })
+                    .await;
             }
             PlayerCommand::StartGame { difficulty } => {
                 match self.start_game(player_id.clone(), difficulty) {
@@ -185,10 +184,7 @@ impl Room {
             }
             PlayerCommand::GameAction { action } => {
                 let result = match self.game.as_mut() {
-                    Some(game) => game
-                        .handle_action(action)
-                        .map(|snapshot| snapshot.clone())
-                        .map_err(RoomError::from),
+                    Some(game) => game.handle_action(action).cloned().map_err(RoomError::from),
                     None => Err(RoomError::NoGame),
                 };
                 match result {
@@ -211,20 +207,21 @@ impl Room {
             Err(mut broadcast_errs) => errs.append(&mut broadcast_errs),
         }
 
-        if errs.len() > 0 {
+        if !errs.is_empty() {
             let mut to_drop = Vec::new();
             let remainder = errs
                 .iter()
-                .filter_map(|err| match err {
-                    RoomError::PlayerDropped(id) => {
+                .filter(|err| {
+                    if let RoomError::PlayerDropped(id) = err {
                         to_drop.push(id);
-                        return None;
+                        false
+                    } else {
+                        true
                     }
-                    _ => return Some(err),
                 })
                 .cloned()
                 .collect::<Vec<RoomError>>();
-            if remainder.len() > 0 {
+            if !remainder.is_empty() {
                 return Err(remainder);
             } else {
                 for id in to_drop {
@@ -264,10 +261,10 @@ impl Room {
             Err(err) => return Err(vec![err]),
         };
 
-        return match self.broadcast_message(state.into()).await {
+        match self.broadcast_message(state.into()).await {
             Ok(()) => Ok(()),
             Err(e) => Err(e),
-        };
+        }
     }
 
     async fn broadcast_message(&mut self, msg: SessionMessage) -> Result<(), Vec<RoomError>> {
@@ -281,21 +278,21 @@ impl Room {
                 }
             }
         }
-        return match errors.len() {
+        match errors.len() {
             0 => Ok(()),
             _ => Err(errors),
-        };
+        }
     }
 
     async fn send_player(&mut self, id: &PlayerId, msg: SessionMessage) -> Result<(), RoomError> {
         let addr: &PlayerAddr = match self.players.get_mut(id) {
             Some(addr) => addr,
-            None => return Err(RoomError::NoPlayerFound(id.clone()).into()),
+            None => return Err(RoomError::NoPlayerFound(id.clone())),
         };
 
         return match addr.send(msg).await {
             Ok(()) => Ok(()),
-            Err(_e) => Err(RoomError::PlayerDropped(id.clone()).into()),
+            Err(_e) => Err(RoomError::PlayerDropped(id.clone())),
         };
     }
 

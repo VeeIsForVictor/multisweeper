@@ -18,4 +18,5 @@ use super::wire::{ClientRequest, ServerResponse};
 #[asyncapi_operation(name = "clientMessages", action = "receive", channel = "multisweeper")]
 #[asyncapi_operation(name = "serverMessages", action = "send", channel = "multisweeper")]
 #[asyncapi_messages(ClientRequest, ServerResponse)]
+#[allow(clippy::duplicated_attributes)]
 pub struct MultisweeperApi;

@@ -39,18 +39,18 @@ impl Registry {
     pub fn new() -> Self {
         let (addr, mailbox) = mpsc::channel::<RegistryMessage>(10);
 
-        return Registry {
+        Registry {
             entity_counter: 0,
             rooms: HashMap::new(),
             mailbox,
             addr,
-        };
+        }
     }
 
     fn generate_name(&mut self, prefix: &str) -> String {
         let id = self.entity_counter;
         self.entity_counter += 1;
-        String::from(format!("{prefix}{id:0>5}"))
+        return format!("{prefix}{id:0>5}");
     }
 
     fn register_player(&mut self) -> String {
@@ -63,7 +63,7 @@ impl Registry {
         let room_handle = &room.request_handle();
         tokio::spawn(room.handle_connection());
         self.rooms.insert(code.clone(), room_handle.clone());
-        return (code, room_handle.clone());
+        (code, room_handle.clone())
     }
 
     pub fn request_addr(&self) -> RegistryAddr {
@@ -73,7 +73,7 @@ impl Registry {
     fn request_lobby(&mut self, code: RoomCode) -> Result<RoomAddr, RegistryError> {
         match self.rooms.get(&code) {
             Some(handle) => Ok(handle.clone()),
-            None => Err(RegistryError::RoomNotFound(code).into()),
+            None => Err(RegistryError::RoomNotFound(code)),
         }
     }
 
@@ -114,11 +114,13 @@ impl Registry {
         match msg {
             RegistryMessage::CreateLobby(reply) => {
                 let (_code, addr) = self.register_lobby().await;
-                return Ok(Self::handle_reply(reply, addr).await);
+                Self::handle_reply(reply, addr).await;
+                Ok(())
             }
             RegistryMessage::RequestLobby { code, reply } => {
                 let result = self.request_lobby(code);
-                return Ok(Self::handle_reply(reply, result).await);
+                Self::handle_reply(reply, result).await;
+                Ok(())
             }
             RegistryMessage::QueryLobbies(reply) => {
                 let lobbies = self
@@ -126,16 +128,24 @@ impl Registry {
                     .iter()
                     .map(ToString::to_string)
                     .collect();
-                return Ok(Self::handle_reply(reply, lobbies).await);
+                Self::handle_reply(reply, lobbies).await;
+                Ok(())
             }
             RegistryMessage::CreatePlayer(reply) => {
                 let id = self.register_player();
-                return Ok(Self::handle_reply(reply, id).await);
+                Self::handle_reply(reply, id).await;
+                Ok(())
             }
         }
     }
 
     async fn handle_reply<T>(reply: ReplyHandle<T>, msg: T) -> () {
         let _ = reply.send(msg);
+    }
+}
+
+impl Default for Registry {
+    fn default() -> Self {
+        Self::new()
     }
 }

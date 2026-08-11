@@ -26,11 +26,11 @@ pub enum SessionMessage {
 
 impl From<RoomState> for SessionMessage {
     fn from(value: RoomState) -> Self {
-        return SessionMessage::RoomState {
+        SessionMessage::RoomState {
             code: value.code,
             owner: value.owner,
             players: value.players,
             game: value.game,
-        };
+        }
     }
 }
