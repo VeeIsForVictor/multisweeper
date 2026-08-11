@@ -1,4 +1,4 @@
-use std::{collections::HashMap, println, todo};
+use std::collections::HashMap;
 
 use anyhow::Result;
 use multisweeper_core::{Game, GameDifficulty, GameError, GameSnapshot};
@@ -6,7 +6,13 @@ use rand::random;
 use thiserror::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
-use crate::{protocol::{room::{PlayerCommand, RoomMessage}, session::SessionMessage}, session::{PlayerAddr, PlayerId}};
+use crate::{
+    protocol::{
+        room::{PlayerCommand, RoomMessage},
+        session::SessionMessage,
+    },
+    session::{PlayerAddr, PlayerId},
+};
 
 pub type RoomCode = String;
 pub type RoomMailbox = Receiver<RoomMessage>;
@@ -20,10 +26,16 @@ pub enum RoomError {
     PlayerDropped(PlayerId),
     #[error("no such player {0}")]
     NoPlayerFound(PlayerId),
+    #[error("only the room owner can start the game")]
+    NotOwner,
+    #[error("game has already started")]
+    GameAlreadyStarted,
+    #[error("game has not started")]
+    NoGame,
     #[error("no players remaining")]
     AllPlayersDropped,
     #[error("game error: {0}")]
-    Game(#[from] GameError)
+    Game(#[from] GameError),
 }
 
 pub struct Room {
@@ -32,18 +44,18 @@ pub struct Room {
     addr: RoomAddr,
     players: HashMap<PlayerId, PlayerAddr>,
     owner: Option<PlayerId>,
-    game: Option<Game>
+    game: Option<Game>,
 }
 
 pub struct RoomState {
     pub code: RoomCode,
     pub players: Vec<PlayerId>,
     pub owner: Option<PlayerId>,
-    pub game: Option<GameSnapshot>
+    pub game: Option<GameSnapshot>,
 }
 
 enum RoomEvent {
-    Session(Option<RoomMessage>)
+    Session(Option<RoomMessage>),
 }
 
 impl Room {
@@ -55,19 +67,22 @@ impl Room {
             addr: sender,
             players: HashMap::new(),
             owner: None,
-            game: None
+            game: None,
         };
     }
 
-    fn start_game(&mut self, requestor_id: PlayerId, difficulty: GameDifficulty) -> Result<(), GameError> {
+    fn start_game(
+        &mut self,
+        requestor_id: PlayerId,
+        difficulty: GameDifficulty,
+    ) -> Result<(), RoomError> {
         if Some(requestor_id) != self.owner {
-            
+            return Err(RoomError::NotOwner);
         }
-        let game = match Game::new(difficulty, random()) {
-            Ok(game) => game,
-            Err(e) => return Err(e),
-        };
-        self.game = Some(game);
+        if self.game.is_some() {
+            return Err(RoomError::GameAlreadyStarted);
+        }
+        self.game = Some(Game::new(difficulty, random())?);
         Ok(())
     }
 
@@ -80,18 +95,18 @@ impl Room {
     }
 
     pub fn state(&self) -> Result<RoomState, RoomError> {
-        return Ok(RoomState { 
-            code: self.code().to_string(), 
-            players: self.players.keys().map(ToString::to_string).collect(), 
+        return Ok(RoomState {
+            code: self.code().to_string(),
+            players: self.players.keys().map(ToString::to_string).collect(),
             owner: self.owner.to_owned(),
             game: match &self.game {
                 Some(game) => Some(game.snapshot().clone()),
                 None => None,
-            }
-        })
+            },
+        });
     }
 
-    fn register_player(&mut self, id: PlayerId, addr: PlayerAddr ) {
+    fn register_player(&mut self, id: PlayerId, addr: PlayerAddr) {
         if let None = self.owner {
             self.owner = Some(id.clone());
         }
@@ -101,9 +116,7 @@ impl Room {
     pub async fn handle_connection(mut self) -> Result<()> {
         match self.event_loop().await {
             Ok(()) => Ok(()),
-            Err(e) => {
-                Err(e)
-            }
+            Err(e) => Err(e),
         }
     }
 
@@ -133,31 +146,66 @@ impl Room {
     }
 
     async fn handle_mailbox(&mut self, msg: RoomMessage) -> Result<(), Vec<RoomError>> {
-        let player_id = msg.id;
+        let player_id = msg.id.clone();
         let mut errs = Vec::new();
         match msg.command {
             PlayerCommand::Join { handle } => {
                 if let None = self.game {
                     self.register_player(player_id, handle.clone());
                 } else {
-                    let _ = handle.send(SessionMessage::Kicked { reason: "game has already started".to_string() }).await;
+                    let _ = handle
+                        .send(SessionMessage::Kicked {
+                            reason: "game has already started".to_string(),
+                        })
+                        .await;
                 }
-            },
+            }
             PlayerCommand::Leave => {
                 let addr = match self.drop_player(&player_id).await {
                     Ok(addr) => addr,
-                    Err(_) => return Ok(())
+                    Err(_) => return Ok(()),
                 };
-                let _ = addr.send(SessionMessage::Kicked { reason: "player left".to_string() });
-            },
+                let _ = addr.send(SessionMessage::Kicked {
+                    reason: "player left".to_string(),
+                });
+            }
             PlayerCommand::StartGame { difficulty } => {
-                match self.start_game(player_id, difficulty) {
-                    Ok(_) => (),
-                    Err(e) => errs.push(RoomError::Game(e)),
+                match self.start_game(player_id.clone(), difficulty) {
+                    Ok(_) => {
+                        if let Err(mut send_errors) =
+                            self.broadcast_message(SessionMessage::GameStarted).await
+                        {
+                            errs.append(&mut send_errors);
+                        }
+                    }
+                    Err(e) => {
+                        self.send_player_error(&player_id, e.to_string()).await;
+                    }
                 };
+            }
+            PlayerCommand::GameAction { action } => {
+                let result = match self.game.as_mut() {
+                    Some(game) => game
+                        .handle_action(action)
+                        .map(|snapshot| snapshot.clone())
+                        .map_err(RoomError::from),
+                    None => Err(RoomError::NoGame),
+                };
+                match result {
+                    Ok(_) => (),
+                    Err(error) => self.send_player_error(&player_id, error.to_string()).await,
+                }
+            }
+            PlayerCommand::GameQuery => match self.state() {
+                Ok(state) => {
+                    if let Err(error) = self.send_player(&player_id, state.into()).await {
+                        errs.push(error);
+                    }
+                }
+                Err(error) => errs.push(error),
             },
         }
-        
+
         match self.broadcast_state().await {
             Ok(()) => (),
             Err(mut broadcast_errs) => errs.append(&mut broadcast_errs),
@@ -165,24 +213,30 @@ impl Room {
 
         if errs.len() > 0 {
             let mut to_drop = Vec::new();
-            let remainder = errs.iter().filter_map(|err| {
-                match err {
+            let remainder = errs
+                .iter()
+                .filter_map(|err| match err {
                     RoomError::PlayerDropped(id) => {
                         to_drop.push(id);
                         return None;
-                    },
-                    _ => return Some(err)
-                }
-            }).cloned().collect::<Vec<RoomError>>();
+                    }
+                    _ => return Some(err),
+                })
+                .cloned()
+                .collect::<Vec<RoomError>>();
             if remainder.len() > 0 {
                 return Err(remainder);
             } else {
                 for id in to_drop {
                     let addr = match self.drop_player(id).await {
                         Ok(addr) => addr,
-                        Err(_) => continue
+                        Err(_) => continue,
                     };
-                    let _ = addr.send(SessionMessage::Kicked { reason: "player dropped".to_string() }).await;
+                    let _ = addr
+                        .send(SessionMessage::Kicked {
+                            reason: "player dropped".to_string(),
+                        })
+                        .await;
                 }
                 let _ = self.broadcast_state().await;
             };
@@ -191,32 +245,23 @@ impl Room {
         Ok(())
     }
 
-    async fn register_new_owner(&mut self) -> Result<PlayerId, RoomError> {
-        let new_owner = match self.players.keys().next() {
-            Some(id) => id.clone(),
-            None => return Err(RoomError::AllPlayersDropped)
-        };
-
-        self.owner = Some(new_owner.to_owned());
-        return Ok(new_owner);
-    }
-
     async fn drop_player(&mut self, id: &PlayerId) -> Result<PlayerAddr, RoomError> {
+        let addr = self
+            .players
+            .remove(id)
+            .ok_or_else(|| RoomError::NoPlayerFound(id.to_string()))?;
+
         if Some(id.clone()) == self.owner {
-            self.owner = None;
-            self.register_new_owner().await?;
+            self.owner = self.players.keys().next().cloned();
         }
-        
-        match self.players.remove(id) {
-            Some(addr) => return Ok(addr),
-            None => return Err(RoomError::NoPlayerFound(id.to_string())),
-        };
+
+        Ok(addr)
     }
 
     async fn broadcast_state(&mut self) -> Result<(), Vec<RoomError>> {
         let state = match self.state() {
             Ok(state) => state,
-            Err(err) => return Err(vec![err])
+            Err(err) => return Err(vec![err]),
         };
 
         return match self.broadcast_message(state.into()).await {
@@ -233,13 +278,13 @@ impl Room {
                 Ok(()) => continue,
                 Err(e) => {
                     errors.push(e);
-                },
+                }
             }
-        };
+        }
         return match errors.len() {
             0 => Ok(()),
-            _ => Err(errors)
-        }
+            _ => Err(errors),
+        };
     }
 
     async fn send_player(&mut self, id: &PlayerId, msg: SessionMessage) -> Result<(), RoomError> {
@@ -247,10 +292,14 @@ impl Room {
             Some(addr) => addr,
             None => return Err(RoomError::NoPlayerFound(id.clone()).into()),
         };
-        
+
         return match addr.send(msg).await {
             Ok(()) => Ok(()),
-            Err(_e) => Err(RoomError::PlayerDropped(id.clone()).into())
-        }
+            Err(_e) => Err(RoomError::PlayerDropped(id.clone()).into()),
+        };
+    }
+
+    async fn send_player_error(&mut self, id: &PlayerId, reason: String) {
+        let _ = self.send_player(id, SessionMessage::Error { reason }).await;
     }
 }

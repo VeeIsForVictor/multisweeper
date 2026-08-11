@@ -1,4 +1,4 @@
-use multisweeper_core::GameDifficulty;
+use multisweeper_core::{GameAction, GameDifficulty};
 use serde::{Deserialize, Serialize};
 use tokio_tungstenite::tungstenite::Message;
 
@@ -15,8 +15,23 @@ pub enum ClientRequest {
     LeaveRoom,
     // Game-related
     StartGame { difficulty: ClientDifficulty },
-    GameAction,
+    GameAction { action: ClientGameAction },
     GameQuery,
+}
+
+#[derive(Deserialize)]
+pub enum ClientGameAction {
+    Reveal { x: u8, y: u8 },
+    Flag { x: u8, y: u8 },
+}
+
+impl From<ClientGameAction> for GameAction {
+    fn from(value: ClientGameAction) -> Self {
+        match value {
+            ClientGameAction::Reveal { x, y } => GameAction::Reveal { x, y },
+            ClientGameAction::Flag { x, y } => GameAction::Flag { x, y },
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -24,7 +39,7 @@ pub enum ClientDifficulty {
     Test,
     Easy,
     Medium,
-    Hard
+    Hard,
 }
 
 impl Into<GameDifficulty> for ClientDifficulty {
@@ -34,7 +49,7 @@ impl Into<GameDifficulty> for ClientDifficulty {
             ClientDifficulty::Easy => GameDifficulty::EASY,
             ClientDifficulty::Medium => GameDifficulty::MEDIUM,
             ClientDifficulty::Hard => GameDifficulty::HARD,
-        }
+        };
     }
 }
 

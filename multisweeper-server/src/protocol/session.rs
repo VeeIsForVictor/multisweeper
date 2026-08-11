@@ -1,7 +1,10 @@
 use multisweeper_core::GameSnapshot;
 use serde::Serialize;
 
-use crate::{room::{RoomCode, RoomState}, session::PlayerId};
+use crate::{
+    room::{RoomCode, RoomState},
+    session::PlayerId,
+};
 
 #[derive(Debug, Serialize, Clone)]
 pub enum SessionMessage {
@@ -9,10 +12,13 @@ pub enum SessionMessage {
         code: RoomCode,
         owner: Option<PlayerId>,
         players: Vec<PlayerId>,
-        game: Option<GameSnapshot>
+        game: Option<GameSnapshot>,
     },
     Kicked {
-        reason: String
+        reason: String,
+    },
+    Error {
+        reason: String,
     },
     GameStarted,
 }
@@ -23,7 +29,7 @@ impl From<RoomState> for SessionMessage {
             code: value.code,
             owner: value.owner,
             players: value.players,
-            game: value.game
+            game: value.game,
         };
     }
 }

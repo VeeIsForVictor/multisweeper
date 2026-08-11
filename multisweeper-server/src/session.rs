@@ -1,5 +1,3 @@
-use std::println;
-
 use anyhow::Result;
 use futures::{
     SinkExt, StreamExt,
@@ -46,7 +44,7 @@ pub enum SessionError {
     #[error("already joined a room")]
     RoomAlreadyJoined,
     #[error("no room joined")]
-    NoRoomJoined
+    NoRoomJoined,
 }
 
 pub enum SessionEvent {
@@ -185,11 +183,23 @@ impl Session {
                 }
                 Ok(())
             }
-            ClientRequest::LeaveRoom => Ok(self.send_room(PlayerCommand::Leave).await?),
+            ClientRequest::LeaveRoom => {
+                if self.room.is_none() {
+                    return Ok(self
+                        .send_outbound(ServerResponse::ClientError(
+                            SessionError::NoRoomJoined.to_string(),
+                        ))
+                        .await?);
+                }
+                self.send_room(PlayerCommand::Leave).await?;
+                Ok(())
+            }
             ClientRequest::QueryRooms => {
                 let (reply_sdr, reply_rcr) = oneshot::channel::<Vec<RoomCode>>();
-                let _ = self.registry_addr
-                    .send(RegistryMessage::QueryLobbies(reply_sdr)).await;
+                let _ = self
+                    .registry_addr
+                    .send(RegistryMessage::QueryLobbies(reply_sdr))
+                    .await;
                 let rooms = reply_rcr.await?;
                 Ok(self
                     .send_outbound(ServerResponse::AdvertiseRooms { rooms })
@@ -199,27 +209,75 @@ impl Session {
                 let response = match &self.room {
                     None => ServerResponse::ClientError(SessionError::NoRoomJoined.to_string()),
                     Some(room) => {
-                        match room.send(RoomMessage { id: self.id.clone(), command: PlayerCommand::StartGame { difficulty: difficulty.into() }}).await {
+                        match room
+                            .send(RoomMessage {
+                                id: self.id.clone(),
+                                command: PlayerCommand::StartGame {
+                                    difficulty: difficulty.into(),
+                                },
+                            })
+                            .await
+                        {
                             Ok(_) => return Ok(()),
-                            Err(_) => ServerResponse::ClientError(SessionError::RoomDropped.to_string()),
+                            Err(_) => {
+                                ServerResponse::ClientError(SessionError::RoomDropped.to_string())
+                            }
                         }
                     }
                 };
                 self.send_outbound(response).await?;
                 Ok(())
-            },
-            ClientRequest::GameAction => todo!(),
-            ClientRequest::GameQuery => todo!(),
+            }
+            ClientRequest::GameAction { action } => {
+                if self.room.is_none() {
+                    return Ok(self
+                        .send_outbound(ServerResponse::ClientError(
+                            SessionError::NoRoomJoined.to_string(),
+                        ))
+                        .await?);
+                }
+                self.send_room(PlayerCommand::GameAction {
+                    action: action.into(),
+                })
+                .await?;
+                Ok(())
+            }
+            ClientRequest::GameQuery => {
+                if self.room.is_none() {
+                    return Ok(self
+                        .send_outbound(ServerResponse::ClientError(
+                            SessionError::NoRoomJoined.to_string(),
+                        ))
+                        .await?);
+                }
+                self.send_room(PlayerCommand::GameQuery).await?;
+                Ok(())
+            }
         }
     }
 
     async fn handle_mailbox(&mut self, message: SessionMessage) -> Result<()> {
         match message {
-            SessionMessage::RoomState { code: _, owner: _, players: _, game: _ } => {
+            SessionMessage::RoomState {
+                code: _,
+                owner: _,
+                players: _,
+                game: _,
+            } => {
                 self.send_outbound(ServerResponse::Message(message)).await?;
-            },
-            SessionMessage::Kicked { reason } => todo!(),
-            SessionMessage::GameStarted => todo!(),
+            }
+            SessionMessage::Kicked { reason } => {
+                self.room = None;
+                self.send_outbound(ServerResponse::ClientError(reason))
+                    .await?;
+            }
+            SessionMessage::Error { reason } => {
+                self.send_outbound(ServerResponse::ClientError(reason))
+                    .await?;
+            }
+            SessionMessage::GameStarted => {
+                self.send_outbound(ServerResponse::Message(message)).await?;
+            }
         }
 
         Ok(())
@@ -242,6 +300,6 @@ impl Session {
     }
 
     fn terminate(mut self) {
-        self.outbound.close();
+        let _ = self.outbound.close();
     }
 }

@@ -1,10 +1,8 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use parking_lot::Mutex;
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
-use triomphe::Arc;
 
 use crate::{
     protocol::registry::RegistryMessage,
@@ -138,6 +136,6 @@ impl Registry {
     }
 
     async fn handle_reply<T>(reply: ReplyHandle<T>, msg: T) -> () {
-        reply.send(msg);
+        let _ = reply.send(msg);
     }
 }
