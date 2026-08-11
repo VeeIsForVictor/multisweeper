@@ -1,15 +1,16 @@
+use schemars::JsonSchema;
 use serde::Serialize;
 
 pub use crate::board::CellView as GameCell;
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Debug, Clone, JsonSchema)]
 pub struct GameSnapshot {
     pub status: GameStatus,
     pub action_result: GameActionResult,
     pub board: Vec<Vec<GameCell>>,
 }
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Debug, Clone, JsonSchema)]
 pub enum GameStatus {
     Won,
     NoWinner,
@@ -28,7 +29,7 @@ impl From<ActionOutcome> for GameStatus {
     }
 }
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Debug, Clone, JsonSchema)]
 pub enum GameActionResult {
     Applied,
     Stalled,

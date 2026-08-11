@@ -1,0 +1,579 @@
+{
+  "asyncapi": "3.0.0",
+  "info": {
+    "title": "Multisweeper WebSocket API",
+    "version": "0.1.0",
+    "description": "Real-time room and Minesweeper messages exchanged over WebSocket."
+  },
+  "servers": {
+    "local": {
+      "host": "localhost:8080",
+      "protocol": "ws",
+      "description": "Local Multisweeper server"
+    }
+  },
+  "channels": {
+    "multisweeper": {
+      "address": "/"
+    }
+  },
+  "operations": {
+    "clientMessages": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/multisweeper"
+      },
+      "messages": [
+        {
+          "$ref": "#/components/messages/Ping"
+        },
+        {
+          "$ref": "#/components/messages/QueryRooms"
+        },
+        {
+          "$ref": "#/components/messages/JoinRoom"
+        },
+        {
+          "$ref": "#/components/messages/CreateRoom"
+        },
+        {
+          "$ref": "#/components/messages/LeaveRoom"
+        },
+        {
+          "$ref": "#/components/messages/StartGame"
+        },
+        {
+          "$ref": "#/components/messages/GameAction"
+        },
+        {
+          "$ref": "#/components/messages/GameQuery"
+        }
+      ]
+    },
+    "serverMessages": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/multisweeper"
+      },
+      "messages": [
+        {
+          "$ref": "#/components/messages/Pong"
+        },
+        {
+          "$ref": "#/components/messages/AdvertiseRooms"
+        },
+        {
+          "$ref": "#/components/messages/ClientError"
+        },
+        {
+          "$ref": "#/components/messages/Message"
+        }
+      ]
+    }
+  },
+  "components": {
+    "messages": {
+      "Ping": {
+        "name": "Ping",
+        "title": "Ping",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "Ping"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
+      },
+      "QueryRooms": {
+        "name": "QueryRooms",
+        "title": "QueryRooms",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "QueryRooms"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
+      },
+      "JoinRoom": {
+        "name": "JoinRoom",
+        "title": "JoinRoom",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "payload": {
+              "type": "object",
+              "properties": {
+                "room_code": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "room_code"
+              ]
+            },
+            "type": {
+              "type": "string",
+              "const": "JoinRoom"
+            }
+          },
+          "required": [
+            "type",
+            "payload"
+          ]
+        }
+      },
+      "CreateRoom": {
+        "name": "CreateRoom",
+        "title": "CreateRoom",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "CreateRoom"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
+      },
+      "LeaveRoom": {
+        "name": "LeaveRoom",
+        "title": "LeaveRoom",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "LeaveRoom"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
+      },
+      "StartGame": {
+        "name": "StartGame",
+        "title": "StartGame",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "payload": {
+              "type": "object",
+              "properties": {
+                "difficulty": {
+                  "$ref": "#/components/schemas/ClientDifficulty"
+                }
+              },
+              "required": [
+                "difficulty"
+              ]
+            },
+            "type": {
+              "type": "string",
+              "const": "StartGame"
+            }
+          },
+          "required": [
+            "type",
+            "payload"
+          ]
+        }
+      },
+      "GameAction": {
+        "name": "GameAction",
+        "title": "GameAction",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "payload": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "$ref": "#/components/schemas/ClientGameAction"
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "type": {
+              "type": "string",
+              "const": "GameAction"
+            }
+          },
+          "required": [
+            "type",
+            "payload"
+          ]
+        }
+      },
+      "GameQuery": {
+        "name": "GameQuery",
+        "title": "GameQuery",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "GameQuery"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
+      },
+      "Pong": {
+        "name": "Pong",
+        "title": "Pong",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "Pong"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
+      },
+      "AdvertiseRooms": {
+        "name": "AdvertiseRooms",
+        "title": "AdvertiseRooms",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "payload": {
+              "type": "object",
+              "properties": {
+                "rooms": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "rooms"
+              ]
+            },
+            "type": {
+              "type": "string",
+              "const": "AdvertiseRooms"
+            }
+          },
+          "required": [
+            "type",
+            "payload"
+          ]
+        }
+      },
+      "ClientError": {
+        "name": "ClientError",
+        "title": "ClientError",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "payload": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "ClientError"
+            }
+          },
+          "required": [
+            "type",
+            "payload"
+          ]
+        }
+      },
+      "Message": {
+        "name": "Message",
+        "title": "Message",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "payload": {
+              "$ref": "#/components/schemas/SessionMessage"
+            },
+            "type": {
+              "type": "string",
+              "const": "Message"
+            }
+          },
+          "required": [
+            "type",
+            "payload"
+          ]
+        }
+      }
+    },
+    "schemas": {
+      "ClientDifficulty": {
+        "type": "string",
+        "enum": [
+          "Test",
+          "Easy",
+          "Medium",
+          "Hard"
+        ]
+      },
+      "ClientGameAction": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "Reveal": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "integer",
+                    "format": "uint8",
+                    "maximum": 255,
+                    "minimum": 0
+                  },
+                  "y": {
+                    "type": "integer",
+                    "format": "uint8",
+                    "maximum": 255,
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "x",
+                  "y"
+                ]
+              }
+            },
+            "required": [
+              "Reveal"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "Flag": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "integer",
+                    "format": "uint8",
+                    "maximum": 255,
+                    "minimum": 0
+                  },
+                  "y": {
+                    "type": "integer",
+                    "format": "uint8",
+                    "maximum": 255,
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "x",
+                  "y"
+                ]
+              }
+            },
+            "required": [
+              "Flag"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "CellView": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "HiddenCell",
+              "FlaggedCell",
+              "MinedCell"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "VisibleCell": {
+                "type": "integer",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0
+              }
+            },
+            "required": [
+              "VisibleCell"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "GameActionResult": {
+        "type": "string",
+        "enum": [
+          "Applied",
+          "Stalled",
+          "Started",
+          "Eliminated",
+          "Won"
+        ]
+      },
+      "GameSnapshot": {
+        "type": "object",
+        "properties": {
+          "action_result": {
+            "$ref": "#/components/schemas/GameActionResult"
+          },
+          "board": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/CellView"
+              }
+            }
+          },
+          "status": {
+            "$ref": "#/components/schemas/GameStatus"
+          }
+        },
+        "required": [
+          "status",
+          "action_result",
+          "board"
+        ]
+      },
+      "GameStatus": {
+        "type": "string",
+        "enum": [
+          "Won",
+          "NoWinner",
+          "Playing"
+        ]
+      },
+      "SessionMessage": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "GameStarted"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "RoomState": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "game": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/GameSnapshot"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "owner": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "players": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "code",
+                  "players"
+                ]
+              }
+            },
+            "required": [
+              "RoomState"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "Kicked": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            },
+            "required": [
+              "Kicked"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "Error": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            },
+            "required": [
+              "Error"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    }
+  }
+}

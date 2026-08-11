@@ -5,7 +5,9 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.104"
+asyncapi-rust = "0.4.0"
 multisweeper-core = { version = "0.1.0", path = "../multisweeper-core" }
+schemars = { version = "1.1", features = ["derive"] }
 thiserror = "2.0.19"
 serde = {version = "1.0.228", features=["derive"]}
 serde_json = "1.0.145"

@@ -1,10 +1,11 @@
+use asyncapi_rust::{ToAsyncApiMessage, schemars::JsonSchema};
 use multisweeper_core::{GameAction, GameDifficulty};
 use serde::{Deserialize, Serialize};
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::{protocol::session::SessionMessage, room::RoomCode};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, JsonSchema, ToAsyncApiMessage)]
 #[serde(tag = "type", content = "payload")]
 pub enum ClientRequest {
     Ping,
@@ -19,7 +20,7 @@ pub enum ClientRequest {
     GameQuery,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, JsonSchema)]
 pub enum ClientGameAction {
     Reveal { x: u8, y: u8 },
     Flag { x: u8, y: u8 },
@@ -34,7 +35,7 @@ impl From<ClientGameAction> for GameAction {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, JsonSchema)]
 pub enum ClientDifficulty {
     Test,
     Easy,
@@ -64,7 +65,7 @@ impl TryFrom<Message> for ClientRequest {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, JsonSchema, ToAsyncApiMessage)]
 #[serde(tag = "type", content = "payload")]
 pub enum ServerResponse {
     Pong,

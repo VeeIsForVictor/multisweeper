@@ -9,16 +9,11 @@ use tokio::{
 use tokio_tungstenite::accept_async;
 use tracing::{info, warn};
 
-use crate::{
+use multisweeper_server::{
     protocol::registry::RegistryMessage,
     registry::{Registry, RegistryAddr},
     session::{PlayerId, Session},
 };
-
-mod protocol;
-mod registry;
-mod room;
-mod session;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about=None)]

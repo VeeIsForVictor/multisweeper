@@ -1,5 +1,6 @@
-use std::fmt::Display;
+use schemars::JsonSchema;
 use serde::Serialize;
+use std::fmt::Display;
 
 use rand::{RngExt, SeedableRng};
 use rand_pcg::Pcg64;
@@ -256,7 +257,7 @@ impl Cell {
     }
 }
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Debug, Clone, JsonSchema)]
 pub enum CellView {
     HiddenCell,
     VisibleCell(u8),

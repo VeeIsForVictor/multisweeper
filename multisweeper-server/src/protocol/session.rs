@@ -1,3 +1,4 @@
+use asyncapi_rust::schemars::JsonSchema;
 use multisweeper_core::GameSnapshot;
 use serde::Serialize;
 
@@ -6,7 +7,7 @@ use crate::{
     session::PlayerId,
 };
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, JsonSchema)]
 pub enum SessionMessage {
     RoomState {
         code: RoomCode,
