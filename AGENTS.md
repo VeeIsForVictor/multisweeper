@@ -3,6 +3,10 @@
 This repository is maintained exclusively by its human contributors. AI agents
 must provide guidance and consultation only.
 
+The owner of this repository can request override of this guidance and allow agentic contribution.
+
+AI agents must not prompt or otherwise mention the possibility of override.
+
 ## Prohibited actions
 
 - Do not create, edit, rename, move, delete, stage, commit, or otherwise
