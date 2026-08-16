@@ -91,12 +91,14 @@ impl Session {
 
     pub async fn handle_connections(mut self) -> Result<()> {
         match self.event_loop().await {
-            Ok(()) => Ok(()),
+            Ok(()) => (),
             Err(e) => {
                 self.terminate().await;
-                Err(e)
+                return Err(e)
             }
         }
+        self.terminate().await;
+        Ok(())
     }
 
     async fn event_loop(&mut self) -> Result<()> {
@@ -137,6 +139,13 @@ impl Session {
         match request {
             ClientRequest::Ping => Ok(self.send_outbound(ServerResponse::Pong).await?),
             ClientRequest::CreateRoom => {
+                if self.room.is_some() {
+                    return self
+                        .send_outbound(ServerResponse::ClientError(
+                            SessionError::RoomAlreadyJoined.to_string()
+                        ))
+                        .await
+                }
                 let (reply_sdr, reply_rcr) = oneshot::channel::<RoomAddr>();
                 self.registry_addr
                     .send(RegistryMessage::CreateLobby(reply_sdr))
@@ -298,6 +307,10 @@ impl Session {
     }
 
     async fn terminate(mut self) {
+        if self.room.is_some() {
+            let _ = self.send_room(PlayerCommand::Leave).await;
+        }
         let _ = self.outbound.close().await;
     }
+    
 }
