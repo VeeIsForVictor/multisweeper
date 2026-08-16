@@ -219,8 +219,18 @@ impl Room {
                     Some(game) => game.handle_action(action).cloned().map_err(RoomError::from),
                     None => Err(RoomError::NoGame),
                 };
+
                 match result {
-                    Ok(_) => (),
+                    Ok(_) => {
+                        match self.state() {
+                            Ok(state) => if let Err(error) = self.send_player(&player_id, state.into()).await {
+                                errs.push(error);
+                            },
+                            Err(error) => {
+                                errs.push(error);
+                            }
+                        }
+                    },
                     Err(error) => self.send_player_error(&player_id, error.to_string()).await,
                 }
             }
