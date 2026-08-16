@@ -7,13 +7,40 @@ use crate::{
     session::PlayerId,
 };
 
+#[derive(Debug, Serialize, Clone, JsonSchema, PartialEq, Eq)]
+pub enum PlayerState {
+    Spectator,
+    Playing,
+    Eliminated,
+}
+
+#[derive(Debug, Serialize, Clone, JsonSchema)]
+pub struct PlayerView {
+    pub id: PlayerId,
+    pub state: PlayerState,
+}
+
+#[derive(Debug, Serialize, Clone, JsonSchema, PartialEq, Eq)]
+pub enum MatchState {
+    Waiting,
+    Playing,
+    Won,
+    NoWinner,
+}
+
+#[derive(Debug, Serialize, Clone, JsonSchema)]
+pub struct MatchView {
+    pub state: MatchState,
+    pub game: Option<GameSnapshot>,
+}
+
 #[derive(Debug, Serialize, Clone, JsonSchema)]
 pub enum SessionMessage {
     RoomState {
         code: RoomCode,
         owner: Option<PlayerId>,
-        players: Vec<PlayerId>,
-        game: Option<GameSnapshot>,
+        players: Vec<PlayerView>,
+        game: MatchView,
     },
     Kicked {
         reason: String,
@@ -30,7 +57,10 @@ impl From<RoomState> for SessionMessage {
             code: value.code,
             owner: value.owner,
             players: value.players,
-            game: value.game,
+            game: MatchView {
+                state: value.match_state,
+                game: value.game,
+            },
         }
     }
 }

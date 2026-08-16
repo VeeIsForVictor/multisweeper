@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use multisweeper_core::{Game, GameDifficulty, GameError, GameSnapshot};
+use multisweeper_core::{Game, GameActionResult, GameDifficulty, GameError, GameSnapshot};
 use rand::random;
 use thiserror::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
@@ -9,7 +9,7 @@ use tokio::sync::mpsc::{self, Receiver, Sender};
 use crate::{
     protocol::{
         room::{PlayerCommand, RoomMessage},
-        session::SessionMessage,
+        session::{MatchState, PlayerState, PlayerView, SessionMessage},
     },
     session::{PlayerAddr, PlayerId},
 };
@@ -32,25 +32,38 @@ pub enum RoomError {
     GameAlreadyStarted,
     #[error("game has not started")]
     NoGame,
+    #[error("game has ended")]
+    GameEnded,
+    #[error("player {0} is spectating")]
+    PlayerIsSpectating(PlayerId),
+    #[error("player {0} has been eliminated")]
+    PlayerEliminated(PlayerId),
     #[error("no players remaining")]
     AllPlayersDropped,
     #[error("game error: {0}")]
     Game(#[from] GameError),
 }
 
+struct PlayerRecord {
+    address: PlayerAddr,
+    state: PlayerState,
+}
+
 pub struct Room {
     code: RoomCode,
     mailbox: RoomMailbox,
     addr: RoomAddr,
-    players: HashMap<PlayerId, PlayerAddr>,
+    players: HashMap<PlayerId, PlayerRecord>,
     owner: Option<PlayerId>,
     game: Option<Game>,
+    match_state: MatchState,
 }
 
 pub struct RoomState {
     pub code: RoomCode,
-    pub players: Vec<PlayerId>,
+    pub players: Vec<PlayerView>,
     pub owner: Option<PlayerId>,
+    pub match_state: MatchState,
     pub game: Option<GameSnapshot>,
 }
 
@@ -68,6 +81,7 @@ impl Room {
             players: HashMap::new(),
             owner: None,
             game: None,
+            match_state: MatchState::Waiting,
         }
     }
 
@@ -79,10 +93,14 @@ impl Room {
         if Some(requestor_id) != self.owner {
             return Err(RoomError::NotOwner);
         }
-        if self.game.is_some() {
+        if self.match_state != MatchState::Waiting {
             return Err(RoomError::GameAlreadyStarted);
         }
         self.game = Some(Game::new(difficulty, random())?);
+        self.match_state = MatchState::Playing;
+        for player in self.players.values_mut() {
+            player.state = PlayerState::Playing;
+        }
         Ok(())
     }
 
@@ -97,8 +115,16 @@ impl Room {
     pub fn state(&self) -> Result<RoomState, RoomError> {
         Ok(RoomState {
             code: self.code().to_string(),
-            players: self.players.keys().map(ToString::to_string).collect(),
+            players: self
+                .players
+                .iter()
+                .map(|(id, player)| PlayerView {
+                    id: id.clone(),
+                    state: player.state.clone(),
+                })
+                .collect(),
             owner: self.owner.to_owned(),
+            match_state: self.match_state.clone(),
             game: self.game.as_ref().map(|game| game.snapshot().clone()),
         })
     }
@@ -107,7 +133,46 @@ impl Room {
         if self.owner.is_none() {
             self.owner = Some(id.clone());
         }
-        self.players.insert(id, addr);
+        self.players.insert(
+            id,
+            PlayerRecord {
+                address: addr,
+                state: PlayerState::Spectator,
+            },
+        );
+    }
+
+    fn ensure_can_play(&self, id: &PlayerId) -> Result<(), RoomError> {
+        match self.match_state {
+            MatchState::Waiting => return Err(RoomError::NoGame),
+            MatchState::Won | MatchState::NoWinner => return Err(RoomError::GameEnded),
+            MatchState::Playing => {}
+        }
+
+        let player = self
+            .players
+            .get(id)
+            .ok_or_else(|| RoomError::NoPlayerFound(id.clone()))?;
+        match player.state {
+            PlayerState::Spectator => Err(RoomError::PlayerIsSpectating(id.clone())),
+            PlayerState::Eliminated => Err(RoomError::PlayerEliminated(id.clone())),
+            PlayerState::Playing => Ok(()),
+        }
+    }
+
+    fn mark_player_eliminated(&mut self, id: &PlayerId) -> Result<(), RoomError> {
+        let player = self
+            .players
+            .get_mut(id)
+            .ok_or_else(|| RoomError::NoPlayerFound(id.clone()))?;
+        player.state = PlayerState::Eliminated;
+        Ok(())
+    }
+
+    fn has_active_players(&self) -> bool {
+        self.players
+            .values()
+            .any(|player| player.state == PlayerState::Playing)
     }
 
     pub async fn handle_connection(mut self) -> Result<()> {
@@ -128,7 +193,11 @@ impl Room {
                     let msg = self.receive_mailbox(msg)?;
                     match self.handle_mailbox(msg).await {
                         Ok(()) => continue,
-                        Err(mut remainder) => return Err(remainder.pop().unwrap().into()),
+                        Err(mut remainder) => {
+                            if let Some(error) = remainder.pop() {
+                                return Err(error.into());
+                            }
+                        }
                     }
                 }
             }
@@ -171,7 +240,7 @@ impl Room {
             let _ = self.broadcast_state().await;
             errs = remainder;
         }
-        return errs;
+        errs
     }
 
     async fn handle_mailbox(&mut self, msg: RoomMessage) -> Result<(), Vec<RoomError>> {
@@ -179,7 +248,7 @@ impl Room {
         let mut errs = Vec::new();
         match msg.command {
             PlayerCommand::Join { handle } => {
-                if self.game.is_none() {
+                if self.match_state == MatchState::Waiting {
                     self.register_player(player_id, handle.clone());
                 } else {
                     let _ = handle
@@ -215,22 +284,47 @@ impl Room {
                 };
             }
             PlayerCommand::GameAction { action } => {
-                let result = match self.game.as_mut() {
-                    Some(game) => game.handle_action(action).cloned().map_err(RoomError::from),
-                    None => Err(RoomError::NoGame),
-                };
+                let result = self.ensure_can_play(&player_id).and_then(|()| {
+                    self.game
+                        .as_mut()
+                        .ok_or(RoomError::NoGame)?
+                        .handle_action(action)
+                        .cloned()
+                        .map_err(RoomError::from)
+                });
 
                 match result {
-                    Ok(_) => {
+                    Ok(snapshot) => {
+                        match snapshot.action_result {
+                            GameActionResult::Eliminated => {
+                                if let Err(error) = self.mark_player_eliminated(&player_id) {
+                                    errs.push(error);
+                                } else if !self.has_active_players() {
+                                    if let Some(game) = self.game.as_mut() {
+                                        game.lose_game();
+                                    }
+                                    self.match_state = MatchState::NoWinner;
+                                }
+                            }
+                            GameActionResult::Won => {
+                                self.match_state = MatchState::Won;
+                            }
+                            GameActionResult::Applied
+                            | GameActionResult::Stalled
+                            | GameActionResult::Started => {}
+                        }
                         match self.state() {
-                            Ok(state) => if let Err(error) = self.send_player(&player_id, state.into()).await {
-                                errs.push(error);
-                            },
+                            Ok(state) => {
+                                if let Err(error) = self.send_player(&player_id, state.into()).await
+                                {
+                                    errs.push(error);
+                                }
+                            }
                             Err(error) => {
                                 errs.push(error);
                             }
                         }
-                    },
+                    }
                     Err(error) => self.send_player_error(&player_id, error.to_string()).await,
                 }
             }
@@ -251,9 +345,9 @@ impl Room {
 
         let remainder = self.resolve_mailbox_errs(errs).await;
 
-        return match remainder.len() {
-            0 => Err(remainder),
-            _ => Ok(())
+        match remainder.len() {
+            0 => Ok(()),
+            _ => Err(remainder),
         }
     }
 
@@ -267,7 +361,7 @@ impl Room {
             self.owner = self.players.keys().next().cloned();
         }
 
-        Ok(addr)
+        Ok(addr.address)
     }
 
     async fn broadcast_state(&mut self) -> Result<(), Vec<RoomError>> {
@@ -300,15 +394,15 @@ impl Room {
     }
 
     async fn send_player(&mut self, id: &PlayerId, msg: SessionMessage) -> Result<(), RoomError> {
-        let addr: &PlayerAddr = match self.players.get_mut(id) {
+        let addr = match self.players.get_mut(id) {
             Some(addr) => addr,
             None => return Err(RoomError::NoPlayerFound(id.clone())),
         };
 
-        return match addr.send(msg).await {
+        match addr.address.send(msg).await {
             Ok(()) => Ok(()),
             Err(_e) => Err(RoomError::PlayerDropped(id.clone())),
-        };
+        }
     }
 
     async fn send_player_error(&mut self, id: &PlayerId, reason: String) {
