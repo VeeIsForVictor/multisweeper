@@ -142,6 +142,38 @@ impl Room {
         }
     }
 
+    async fn resolve_mailbox_errs(&mut self, mut errs: Vec<RoomError>) -> Vec<RoomError> {
+        if !errs.is_empty() {
+            let mut to_drop = Vec::new();
+            let remainder = errs
+                .iter()
+                .filter(|err| {
+                    if let RoomError::PlayerDropped(id) = err {
+                        to_drop.push(id);
+                        false
+                    } else {
+                        true
+                    }
+                })
+                .cloned()
+                .collect::<Vec<RoomError>>();
+            for id in to_drop {
+                let addr = match self.drop_player(id).await {
+                    Ok(addr) => addr,
+                    Err(_) => continue,
+                };
+                let _ = addr
+                    .send(SessionMessage::Kicked {
+                        reason: "player dropped".to_string(),
+                    })
+                    .await;
+            }
+            let _ = self.broadcast_state().await;
+            errs = remainder;
+        }
+        return errs;
+    }
+
     async fn handle_mailbox(&mut self, msg: RoomMessage) -> Result<(), Vec<RoomError>> {
         let player_id = msg.id.clone();
         let mut errs = Vec::new();
@@ -207,39 +239,12 @@ impl Room {
             Err(mut broadcast_errs) => errs.append(&mut broadcast_errs),
         }
 
-        if !errs.is_empty() {
-            let mut to_drop = Vec::new();
-            let remainder = errs
-                .iter()
-                .filter(|err| {
-                    if let RoomError::PlayerDropped(id) = err {
-                        to_drop.push(id);
-                        false
-                    } else {
-                        true
-                    }
-                })
-                .cloned()
-                .collect::<Vec<RoomError>>();
-            if !remainder.is_empty() {
-                return Err(remainder);
-            } else {
-                for id in to_drop {
-                    let addr = match self.drop_player(id).await {
-                        Ok(addr) => addr,
-                        Err(_) => continue,
-                    };
-                    let _ = addr
-                        .send(SessionMessage::Kicked {
-                            reason: "player dropped".to_string(),
-                        })
-                        .await;
-                }
-                let _ = self.broadcast_state().await;
-            };
-        }
+        let remainder = self.resolve_mailbox_errs(errs).await;
 
-        Ok(())
+        return match remainder.len() {
+            0 => Err(remainder),
+            _ => Ok(())
+        }
     }
 
     async fn drop_player(&mut self, id: &PlayerId) -> Result<PlayerAddr, RoomError> {
