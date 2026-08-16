@@ -2,6 +2,7 @@
 name = "multisweeper-server"
 version = "0.1.0"
 edition = "2024"
+default-run = "multisweeper-server"
 
 [dependencies]
 anyhow = "1.0.104"
