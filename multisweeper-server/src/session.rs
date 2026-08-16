@@ -94,7 +94,7 @@ impl Session {
             Ok(()) => (),
             Err(e) => {
                 self.terminate().await;
-                return Err(e)
+                return Err(e);
             }
         }
         self.terminate().await;
@@ -142,9 +142,9 @@ impl Session {
                 if self.room.is_some() {
                     return self
                         .send_outbound(ServerResponse::ClientError(
-                            SessionError::RoomAlreadyJoined.to_string()
+                            SessionError::RoomAlreadyJoined.to_string(),
                         ))
-                        .await
+                        .await;
                 }
                 let (reply_sdr, reply_rcr) = oneshot::channel::<RoomAddr>();
                 self.registry_addr
@@ -312,5 +312,4 @@ impl Session {
         }
         let _ = self.outbound.close().await;
     }
-    
 }
