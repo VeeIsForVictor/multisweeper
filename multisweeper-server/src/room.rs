@@ -347,6 +347,15 @@ impl Room {
                     }
                 }
             }
+
+            if self.players.len() == 0 {
+                info!(
+                    target: "multisweeper.room.room_closed",
+                    room_code = %self.code,
+                    "room task terminating gracefully due to no players"
+                );
+                return Ok(());
+            }
         }
     }
 
