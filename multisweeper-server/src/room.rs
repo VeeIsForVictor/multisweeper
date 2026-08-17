@@ -338,7 +338,7 @@ impl Room {
                 RoomEvent::Session(msg) => {
                     let msg = self.receive_mailbox(msg)?;
                     match self.handle_mailbox(msg).await {
-                        Ok(()) => continue,
+                        Ok(()) => (),
                         Err(mut remainder) => {
                             if let Some(error) = remainder.pop() {
                                 return Err(error.into());
@@ -562,6 +562,13 @@ impl Room {
             room_code = %self.code,
             player_id = %id,
             "player left room"
+        );
+
+        info!(
+            target: "multisweeper.room.status",
+            room_code = %self.code,
+            "{0} players remaining in room",
+            self.players.len()
         );
 
         if let RoomMatchState::Playing(active_match) = &self.match_state
