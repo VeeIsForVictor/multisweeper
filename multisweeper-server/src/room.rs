@@ -314,12 +314,7 @@ impl Room {
                             | GameActionResult::Started => {}
                         }
                         match self.state() {
-                            Ok(state) => {
-                                if let Err(error) = self.send_player(&player_id, state.into()).await
-                                {
-                                    errs.push(error);
-                                }
-                            }
+                            Ok(_) => (),
                             Err(error) => {
                                 errs.push(error);
                             }
