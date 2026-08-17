@@ -23,7 +23,10 @@ pub struct PlayerView {
 #[derive(Debug, Serialize, Clone, JsonSchema, PartialEq, Eq)]
 pub enum MatchState {
     Waiting,
-    Playing,
+    Playing {
+        last_player: Option<PlayerId>,
+        current_player: PlayerId,
+    },
     Won,
     NoWinner,
 }
@@ -57,10 +60,7 @@ impl From<RoomState> for SessionMessage {
             code: value.code,
             owner: value.owner,
             players: value.players,
-            game: MatchView {
-                state: value.match_state,
-                game: value.game,
-            },
+            game: value.match_state,
         }
     }
 }

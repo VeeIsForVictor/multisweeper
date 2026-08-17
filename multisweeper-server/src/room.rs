@@ -9,7 +9,9 @@ use tokio::sync::mpsc::{self, Receiver, Sender};
 use crate::{
     protocol::{
         room::{PlayerCommand, RoomMessage},
-        session::{MatchState, PlayerState, PlayerView, SessionMessage},
+        session::{
+            MatchState as ProtocolMatchState, MatchView, PlayerState, PlayerView, SessionMessage,
+        },
     },
     session::{PlayerAddr, PlayerId},
 };
@@ -38,6 +40,8 @@ pub enum RoomError {
     PlayerIsSpectating(PlayerId),
     #[error("player {0} has been eliminated")]
     PlayerEliminated(PlayerId),
+    #[error("player {0} is not current player")]
+    PlayerNotCurrent(PlayerId),
     #[error("no players remaining")]
     AllPlayersDropped,
     #[error("game error: {0}")]
@@ -49,22 +53,34 @@ struct PlayerRecord {
     state: PlayerState,
 }
 
+struct PlayingMatch {
+    game: Game,
+    participants: Vec<PlayerId>,
+    last_player: Option<PlayerId>,
+    current_player: PlayerId,
+}
+
+enum RoomMatchState {
+    Waiting,
+    Playing(PlayingMatch),
+    Won { final_snapshot: GameSnapshot },
+    NoWinner { final_snapshot: GameSnapshot },
+}
+
 pub struct Room {
     code: RoomCode,
     mailbox: RoomMailbox,
     addr: RoomAddr,
     players: HashMap<PlayerId, PlayerRecord>,
     owner: Option<PlayerId>,
-    game: Option<Game>,
-    match_state: MatchState,
+    match_state: RoomMatchState,
 }
 
 pub struct RoomState {
     pub code: RoomCode,
     pub players: Vec<PlayerView>,
     pub owner: Option<PlayerId>,
-    pub match_state: MatchState,
-    pub game: Option<GameSnapshot>,
+    pub match_state: MatchView,
 }
 
 enum RoomEvent {
@@ -80,8 +96,7 @@ impl Room {
             addr: sender,
             players: HashMap::new(),
             owner: None,
-            game: None,
-            match_state: MatchState::Waiting,
+            match_state: RoomMatchState::Waiting,
         }
     }
 
@@ -90,17 +105,23 @@ impl Room {
         requestor_id: PlayerId,
         difficulty: GameDifficulty,
     ) -> Result<(), RoomError> {
-        if Some(requestor_id) != self.owner {
+        if Some(requestor_id.clone()) != self.owner {
             return Err(RoomError::NotOwner);
         }
-        if self.match_state != MatchState::Waiting {
+        if !matches!(self.match_state, RoomMatchState::Waiting) {
             return Err(RoomError::GameAlreadyStarted);
         }
-        self.game = Some(Game::new(difficulty, random())?);
-        self.match_state = MatchState::Playing;
+        let game = Game::new(difficulty, random())?;
+        let participants = self.players.keys().cloned().collect();
         for player in self.players.values_mut() {
             player.state = PlayerState::Playing;
         }
+        self.match_state = RoomMatchState::Playing(PlayingMatch {
+            game,
+            participants,
+            last_player: None,
+            current_player: requestor_id,
+        });
         Ok(())
     }
 
@@ -112,20 +133,46 @@ impl Room {
         self.addr.clone()
     }
 
+    fn get_player_queue(&self) -> Vec<PlayerView> {
+        self.players
+            .iter()
+            .map(|(id, player)| PlayerView {
+                id: id.clone(),
+                state: player.state.clone(),
+            })
+            .collect()
+    }
+
+    fn match_view(&self) -> MatchView {
+        match &self.match_state {
+            RoomMatchState::Waiting => MatchView {
+                state: ProtocolMatchState::Waiting,
+                game: None,
+            },
+            RoomMatchState::Playing(active_match) => MatchView {
+                state: ProtocolMatchState::Playing {
+                    last_player: active_match.last_player.clone(),
+                    current_player: active_match.current_player.clone(),
+                },
+                game: Some(active_match.game.snapshot().clone()),
+            },
+            RoomMatchState::Won { final_snapshot } => MatchView {
+                state: ProtocolMatchState::Won,
+                game: Some(final_snapshot.clone()),
+            },
+            RoomMatchState::NoWinner { final_snapshot } => MatchView {
+                state: ProtocolMatchState::NoWinner,
+                game: Some(final_snapshot.clone()),
+            },
+        }
+    }
+
     pub fn state(&self) -> Result<RoomState, RoomError> {
         Ok(RoomState {
             code: self.code().to_string(),
-            players: self
-                .players
-                .iter()
-                .map(|(id, player)| PlayerView {
-                    id: id.clone(),
-                    state: player.state.clone(),
-                })
-                .collect(),
+            players: self.get_player_queue(),
             owner: self.owner.to_owned(),
-            match_state: self.match_state.clone(),
-            game: self.game.as_ref().map(|game| game.snapshot().clone()),
+            match_state: self.match_view(),
         })
     }
 
@@ -143,21 +190,67 @@ impl Room {
     }
 
     fn ensure_can_play(&self, id: &PlayerId) -> Result<(), RoomError> {
-        match self.match_state {
-            MatchState::Waiting => return Err(RoomError::NoGame),
-            MatchState::Won | MatchState::NoWinner => return Err(RoomError::GameEnded),
-            MatchState::Playing => {}
-        }
-
         let player = self
             .players
             .get(id)
             .ok_or_else(|| RoomError::NoPlayerFound(id.clone()))?;
         match player.state {
-            PlayerState::Spectator => Err(RoomError::PlayerIsSpectating(id.clone())),
-            PlayerState::Eliminated => Err(RoomError::PlayerEliminated(id.clone())),
-            PlayerState::Playing => Ok(()),
+            PlayerState::Spectator => return Err(RoomError::PlayerIsSpectating(id.clone())),
+            PlayerState::Eliminated => return Err(RoomError::PlayerEliminated(id.clone())),
+            PlayerState::Playing => {}
         }
+
+        match &self.match_state {
+            RoomMatchState::Waiting => return Err(RoomError::NoGame),
+            RoomMatchState::Won { .. } | RoomMatchState::NoWinner { .. } => {
+                return Err(RoomError::GameEnded);
+            }
+            RoomMatchState::Playing(active_match) => {
+                if &active_match.current_player != id {
+                    return Err(RoomError::PlayerNotCurrent(id.clone()));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn move_to_next_player(&mut self) -> Result<(), RoomError> {
+        let (current_player, participants) = match &self.match_state {
+            RoomMatchState::Playing(active_match) => (
+                active_match.current_player.clone(),
+                active_match.participants.clone(),
+            ),
+            RoomMatchState::Waiting => return Err(RoomError::NoGame),
+            RoomMatchState::Won { .. } | RoomMatchState::NoWinner { .. } => {
+                return Err(RoomError::GameEnded);
+            }
+        };
+
+        let current_index = participants
+            .iter()
+            .position(|player_id| player_id == &current_player)
+            .ok_or_else(|| RoomError::NoPlayerFound(current_player.clone()))?;
+        let active_players = participants
+            .iter()
+            .filter(|player_id| {
+                self.players
+                    .get(*player_id)
+                    .is_some_and(|player| player.state == PlayerState::Playing)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        let next_player = (1..=participants.len())
+            .map(|offset| &participants[(current_index + offset) % participants.len()])
+            .find(|player_id| active_players.contains(player_id))
+            .cloned()
+            .ok_or(RoomError::AllPlayersDropped)?;
+
+        if let RoomMatchState::Playing(active_match) = &mut self.match_state {
+            active_match.last_player = Some(current_player);
+            active_match.current_player = next_player;
+        }
+        Ok(())
     }
 
     fn mark_player_eliminated(&mut self, id: &PlayerId) -> Result<(), RoomError> {
@@ -173,6 +266,19 @@ impl Room {
         self.players
             .values()
             .any(|player| player.state == PlayerState::Playing)
+    }
+
+    fn finish_without_winner(&mut self) -> Result<(), RoomError> {
+        let match_state = std::mem::replace(&mut self.match_state, RoomMatchState::Waiting);
+        let RoomMatchState::Playing(mut active_match) = match_state else {
+            self.match_state = match_state;
+            return Err(RoomError::GameEnded);
+        };
+        active_match.game.lose_game();
+        self.match_state = RoomMatchState::NoWinner {
+            final_snapshot: active_match.game.snapshot().clone(),
+        };
+        Ok(())
     }
 
     pub async fn handle_connection(mut self) -> Result<()> {
@@ -248,7 +354,7 @@ impl Room {
         let mut errs = Vec::new();
         match msg.command {
             PlayerCommand::Join { handle } => {
-                if self.match_state == MatchState::Waiting {
+                if matches!(self.match_state, RoomMatchState::Waiting) {
                     self.register_player(player_id, handle.clone());
                 } else {
                     let _ = handle
@@ -285,9 +391,17 @@ impl Room {
             }
             PlayerCommand::GameAction { action } => {
                 let result = self.ensure_can_play(&player_id).and_then(|()| {
-                    self.game
-                        .as_mut()
-                        .ok_or(RoomError::NoGame)?
+                    let RoomMatchState::Playing(active_match) = &mut self.match_state else {
+                        return Err(match self.match_state {
+                            RoomMatchState::Waiting => RoomError::NoGame,
+                            RoomMatchState::Won { .. } | RoomMatchState::NoWinner { .. } => {
+                                RoomError::GameEnded
+                            },
+                            RoomMatchState::Playing(_) => unreachable!(),
+                        });
+                    };
+                    active_match
+                        .game
                         .handle_action(action)
                         .cloned()
                         .map_err(RoomError::from)
@@ -300,18 +414,34 @@ impl Room {
                                 if let Err(error) = self.mark_player_eliminated(&player_id) {
                                     errs.push(error);
                                 } else if !self.has_active_players() {
-                                    if let Some(game) = self.game.as_mut() {
-                                        game.lose_game();
+                                    if let Err(error) = self.finish_without_winner() {
+                                        errs.push(error);
                                     }
-                                    self.match_state = MatchState::NoWinner;
+                                } else if let Err(error) = self.move_to_next_player() {
+                                    errs.push(error);
                                 }
                             }
                             GameActionResult::Won => {
-                                self.match_state = MatchState::Won;
+                                let match_state = std::mem::replace(
+                                    &mut self.match_state,
+                                    RoomMatchState::Waiting,
+                                );
+                                if let RoomMatchState::Playing(active_match) = match_state {
+                                    self.match_state = RoomMatchState::Won {
+                                        final_snapshot: active_match.game.snapshot().clone(),
+                                    };
+                                } else {
+                                    self.match_state = match_state;
+                                    errs.push(RoomError::GameEnded);
+                                }
                             }
                             GameActionResult::Applied
                             | GameActionResult::Stalled
-                            | GameActionResult::Started => {}
+                            | GameActionResult::Started => {
+                                if let Err(error) = self.move_to_next_player() {
+                                    errs.push(error);
+                                }
+                            }
                         }
                         match self.state() {
                             Ok(_) => (),
@@ -347,7 +477,7 @@ impl Room {
     }
 
     async fn drop_player(&mut self, id: &PlayerId) -> Result<PlayerAddr, RoomError> {
-        let addr = self
+        let record = self
             .players
             .remove(id)
             .ok_or_else(|| RoomError::NoPlayerFound(id.to_string()))?;
@@ -356,7 +486,17 @@ impl Room {
             self.owner = self.players.keys().next().cloned();
         }
 
-        Ok(addr.address)
+        if let RoomMatchState::Playing(active_match) = &self.match_state
+            && &active_match.current_player == id
+        {
+            if self.has_active_players() {
+                let _ = self.move_to_next_player();
+            } else {
+                let _ = self.finish_without_winner();
+            }
+        }
+
+        Ok(record.address)
     }
 
     async fn broadcast_state(&mut self) -> Result<(), Vec<RoomError>> {
