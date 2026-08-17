@@ -16,11 +16,34 @@ fn main() {
 
     let mut spec = MultisweeperApi::asyncapi_spec();
 
-    let references = |names: Vec<&'static str>| {
+    let client_message_names = ClientRequest::asyncapi_message_names();
+    let server_message_names = ServerResponse::asyncapi_message_names();
+
+    let channel_messages = client_message_names
+        .iter()
+        .chain(server_message_names.iter())
+        .map(|name| {
+            (
+                (*name).to_string(),
+                MessageRef::Reference {
+                    reference: format!("#/components/messages/{name}"),
+                },
+            )
+        })
+        .collect();
+
+    spec.channels
+        .as_mut()
+        .expect("generated channels")
+        .get_mut("multisweeper")
+        .expect("generated channel")
+        .messages = Some(channel_messages);
+
+    let references = |names: &[&'static str]| {
         names
-            .into_iter()
+            .iter()
             .map(|name| MessageRef::Reference {
-                reference: format!("#/components/messages/{name}"),
+                reference: format!("#/channels/multisweeper/messages/{name}"),
             })
             .collect()
     };
@@ -29,11 +52,11 @@ fn main() {
     operations
         .get_mut("clientMessages")
         .expect("client message operation")
-        .messages = Some(references(ClientRequest::asyncapi_message_names()));
+        .messages = Some(references(&client_message_names));
     operations
         .get_mut("serverMessages")
         .expect("server message operation")
-        .messages = Some(references(ServerResponse::asyncapi_message_names()));
+        .messages = Some(references(&server_message_names));
 
     let spec =
         serde_json::to_string_pretty(&spec).expect("failed to serialize AsyncAPI specification");

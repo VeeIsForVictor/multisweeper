@@ -14,7 +14,45 @@
   },
   "channels": {
     "multisweeper": {
-      "address": "/"
+      "address": "/",
+      "messages": {
+        "Ping": {
+          "$ref": "#/components/messages/Ping"
+        },
+        "QueryRooms": {
+          "$ref": "#/components/messages/QueryRooms"
+        },
+        "JoinRoom": {
+          "$ref": "#/components/messages/JoinRoom"
+        },
+        "CreateRoom": {
+          "$ref": "#/components/messages/CreateRoom"
+        },
+        "LeaveRoom": {
+          "$ref": "#/components/messages/LeaveRoom"
+        },
+        "StartGame": {
+          "$ref": "#/components/messages/StartGame"
+        },
+        "GameAction": {
+          "$ref": "#/components/messages/GameAction"
+        },
+        "GameQuery": {
+          "$ref": "#/components/messages/GameQuery"
+        },
+        "Pong": {
+          "$ref": "#/components/messages/Pong"
+        },
+        "AdvertiseRooms": {
+          "$ref": "#/components/messages/AdvertiseRooms"
+        },
+        "ClientError": {
+          "$ref": "#/components/messages/ClientError"
+        },
+        "Message": {
+          "$ref": "#/components/messages/Message"
+        }
+      }
     }
   },
   "operations": {
@@ -25,28 +63,28 @@
       },
       "messages": [
         {
-          "$ref": "#/components/messages/Ping"
+          "$ref": "#/channels/multisweeper/messages/Ping"
         },
         {
-          "$ref": "#/components/messages/QueryRooms"
+          "$ref": "#/channels/multisweeper/messages/QueryRooms"
         },
         {
-          "$ref": "#/components/messages/JoinRoom"
+          "$ref": "#/channels/multisweeper/messages/JoinRoom"
         },
         {
-          "$ref": "#/components/messages/CreateRoom"
+          "$ref": "#/channels/multisweeper/messages/CreateRoom"
         },
         {
-          "$ref": "#/components/messages/LeaveRoom"
+          "$ref": "#/channels/multisweeper/messages/LeaveRoom"
         },
         {
-          "$ref": "#/components/messages/StartGame"
+          "$ref": "#/channels/multisweeper/messages/StartGame"
         },
         {
-          "$ref": "#/components/messages/GameAction"
+          "$ref": "#/channels/multisweeper/messages/GameAction"
         },
         {
-          "$ref": "#/components/messages/GameQuery"
+          "$ref": "#/channels/multisweeper/messages/GameQuery"
         }
       ]
     },
@@ -57,16 +95,16 @@
       },
       "messages": [
         {
-          "$ref": "#/components/messages/Pong"
+          "$ref": "#/channels/multisweeper/messages/Pong"
         },
         {
-          "$ref": "#/components/messages/AdvertiseRooms"
+          "$ref": "#/channels/multisweeper/messages/AdvertiseRooms"
         },
         {
-          "$ref": "#/components/messages/ClientError"
+          "$ref": "#/channels/multisweeper/messages/ClientError"
         },
         {
-          "$ref": "#/components/messages/Message"
+          "$ref": "#/channels/multisweeper/messages/Message"
         }
       ]
     }
@@ -481,6 +519,88 @@
           "Playing"
         ]
       },
+      "MatchState": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "Waiting",
+              "Won",
+              "NoWinner"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "Playing": {
+                "type": "object",
+                "properties": {
+                  "current_player": {
+                    "type": "string"
+                  },
+                  "last_player": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "current_player"
+                ]
+              }
+            },
+            "required": [
+              "Playing"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "MatchView": {
+        "type": "object",
+        "properties": {
+          "game": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GameSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/MatchState"
+          }
+        },
+        "required": [
+          "state"
+        ]
+      },
+      "PlayerState": {
+        "type": "string",
+        "enum": [
+          "Spectator",
+          "Playing",
+          "Eliminated"
+        ]
+      },
+      "PlayerView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/PlayerState"
+          }
+        },
+        "required": [
+          "id",
+          "state"
+        ]
+      },
       "SessionMessage": {
         "oneOf": [
           {
@@ -499,14 +619,7 @@
                     "type": "string"
                   },
                   "game": {
-                    "anyOf": [
-                      {
-                        "$ref": "#/components/schemas/GameSnapshot"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
+                    "$ref": "#/components/schemas/MatchView"
                   },
                   "owner": {
                     "type": [
@@ -517,13 +630,14 @@
                   "players": {
                     "type": "array",
                     "items": {
-                      "type": "string"
+                      "$ref": "#/components/schemas/PlayerView"
                     }
                   }
                 },
                 "required": [
                   "code",
-                  "players"
+                  "players",
+                  "game"
                 ]
               }
             },
