@@ -15,6 +15,7 @@ use tokio_tungstenite::{
     WebSocketStream,
     tungstenite::{Error, Message},
 };
+use tracing::{debug, error, info};
 
 use crate::{
     protocol::{
@@ -89,14 +90,26 @@ impl Session {
         self.addr.clone()
     }
 
+    #[tracing::instrument(name = "session.lifecycle", skip_all, fields(player_id = %self.id))]
     pub async fn handle_connections(mut self) -> Result<()> {
         match self.event_loop().await {
             Ok(()) => (),
             Err(e) => {
+                error!(
+                    target: "multisweeper.session.failed",
+                    player_id = %self.id,
+                    error = %e,
+                    "session terminated with an error"
+                );
                 self.terminate().await;
                 return Err(e);
             }
         }
+        info!(
+            target: "multisweeper.session.closed",
+            player_id = %self.id,
+            "session closed"
+        );
         self.terminate().await;
         Ok(())
     }
@@ -135,7 +148,14 @@ impl Session {
         }
     }
 
+    #[tracing::instrument(name = "session.request", skip_all, fields(player_id = %self.id))]
     async fn handle_inbound(&mut self, request: ClientRequest) -> Result<()> {
+        debug!(
+            target: "multisweeper.session.request_received",
+            player_id = %self.id,
+            request = client_request_name(&request),
+            "client request received"
+        );
         match request {
             ClientRequest::Ping => Ok(self.send_outbound(ServerResponse::Pong).await?),
             ClientRequest::CreateRoom => {
@@ -262,7 +282,14 @@ impl Session {
         }
     }
 
+    #[tracing::instrument(name = "session.mailbox_message", skip_all, fields(player_id = %self.id))]
     async fn handle_mailbox(&mut self, message: SessionMessage) -> Result<()> {
+        debug!(
+            target: "multisweeper.session.message_received",
+            player_id = %self.id,
+            message = session_message_name(&message),
+            "server message received"
+        );
         match message {
             SessionMessage::RoomState {
                 code: _,
@@ -289,12 +316,26 @@ impl Session {
         Ok(())
     }
 
+    #[tracing::instrument(name = "session.send_response", skip_all, fields(player_id = %self.id))]
     async fn send_outbound(&mut self, response: ServerResponse) -> Result<()> {
+        debug!(
+            target: "multisweeper.session.response_sent",
+            player_id = %self.id,
+            response = server_response_name(&response),
+            "server response sent"
+        );
         self.outbound.send(response.try_into()?).await?;
         Ok(())
     }
 
+    #[tracing::instrument(name = "session.send_room_command", skip_all, fields(player_id = %self.id))]
     async fn send_room(&mut self, command: PlayerCommand) -> Result<()> {
+        debug!(
+            target: "multisweeper.session.room_command_sent",
+            player_id = %self.id,
+            command = player_command_name(&command),
+            "room command sent"
+        );
         match &self.room {
             Some(addr) => Ok(addr
                 .send(RoomMessage {
@@ -311,5 +352,46 @@ impl Session {
             let _ = self.send_room(PlayerCommand::Leave).await;
         }
         let _ = self.outbound.close().await;
+    }
+}
+
+fn client_request_name(request: &ClientRequest) -> &'static str {
+    match request {
+        ClientRequest::Ping => "ping",
+        ClientRequest::QueryRooms => "query_rooms",
+        ClientRequest::JoinRoom { .. } => "join_room",
+        ClientRequest::CreateRoom => "create_room",
+        ClientRequest::LeaveRoom => "leave_room",
+        ClientRequest::StartGame { .. } => "start_game",
+        ClientRequest::GameAction { .. } => "game_action",
+        ClientRequest::GameQuery => "game_query",
+    }
+}
+
+fn player_command_name(command: &PlayerCommand) -> &'static str {
+    match command {
+        PlayerCommand::Join { .. } => "join",
+        PlayerCommand::Leave => "leave",
+        PlayerCommand::StartGame { .. } => "start_game",
+        PlayerCommand::GameAction { .. } => "game_action",
+        PlayerCommand::GameQuery => "game_query",
+    }
+}
+
+fn session_message_name(message: &SessionMessage) -> &'static str {
+    match message {
+        SessionMessage::RoomState { .. } => "room_state",
+        SessionMessage::Kicked { .. } => "kicked",
+        SessionMessage::Error { .. } => "error",
+        SessionMessage::GameStarted => "game_started",
+    }
+}
+
+fn server_response_name(response: &ServerResponse) -> &'static str {
+    match response {
+        ServerResponse::Pong => "pong",
+        ServerResponse::AdvertiseRooms { .. } => "advertise_rooms",
+        ServerResponse::ClientError(_) => "client_error",
+        ServerResponse::Message(_) => "message",
     }
 }

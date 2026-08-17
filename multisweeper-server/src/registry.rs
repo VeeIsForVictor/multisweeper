@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
+use tracing::{debug, info, warn};
 
 use crate::{
     protocol::registry::RegistryMessage,
@@ -50,7 +51,7 @@ impl Registry {
     fn generate_name(&mut self, prefix: &str) -> String {
         let id = self.entity_counter;
         self.entity_counter += 1;
-        return format!("{prefix}{id:0>5}");
+        return format!("{prefix}{id:0>5}")
     }
 
     fn register_player(&mut self) -> String {
@@ -63,6 +64,12 @@ impl Registry {
         let room_handle = &room.request_handle();
         tokio::spawn(room.handle_connection());
         self.rooms.insert(code.clone(), room_handle.clone());
+        info!(
+            target: "multisweeper.registry.room_created",
+            room_code = %code,
+            room_count = self.rooms.len(),
+            "room created"
+        );
         (code, room_handle.clone())
     }
 
@@ -81,6 +88,7 @@ impl Registry {
         self.rooms.keys().collect()
     }
 
+    #[tracing::instrument(name = "registry.lifecycle", skip_all)]
     pub async fn handle_connections(mut self) -> Result<()> {
         match self.event_loop().await {
             Ok(()) => Ok(()),
@@ -111,6 +119,12 @@ impl Registry {
     }
 
     async fn handle_mailbox(&mut self, msg: RegistryMessage) -> Result<()> {
+        let command = registry_message_name(&msg);
+        debug!(
+            target: "multisweeper.registry.command",
+            command,
+            "registry command received"
+        );
         match msg {
             RegistryMessage::CreateLobby(reply) => {
                 let (_code, addr) = self.register_lobby().await;
@@ -119,6 +133,13 @@ impl Registry {
             }
             RegistryMessage::RequestLobby { code, reply } => {
                 let result = self.request_lobby(code);
+                if result.is_err() {
+                    warn!(
+                        target: "multisweeper.registry.room_lookup_failed",
+                        error_type = "room_not_found",
+                        "room lookup failed"
+                    );
+                }
                 Self::handle_reply(reply, result).await;
                 Ok(())
             }
@@ -141,6 +162,15 @@ impl Registry {
 
     async fn handle_reply<T>(reply: ReplyHandle<T>, msg: T) -> () {
         let _ = reply.send(msg);
+    }
+}
+
+fn registry_message_name(message: &RegistryMessage) -> &'static str {
+    match message {
+        RegistryMessage::CreateLobby(_) => "create_lobby",
+        RegistryMessage::RequestLobby { .. } => "request_lobby",
+        RegistryMessage::QueryLobbies(_) => "query_lobbies",
+        RegistryMessage::CreatePlayer(_) => "create_player",
     }
 }
 

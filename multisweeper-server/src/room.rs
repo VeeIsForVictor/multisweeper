@@ -5,6 +5,7 @@ use multisweeper_core::{Game, GameActionResult, GameDifficulty, GameError, GameS
 use rand::random;
 use thiserror::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
+use tracing::{debug, error, info, warn};
 
 use crate::{
     protocol::{
@@ -120,8 +121,14 @@ impl Room {
             game,
             participants,
             last_player: None,
-            current_player: requestor_id,
+            current_player: requestor_id.clone(),
         });
+        info!(
+            target: "multisweeper.room.match_started",
+            room_code = %self.code,
+            player_id = %requestor_id,
+            "match started"
+        );
         Ok(())
     }
 
@@ -181,11 +188,18 @@ impl Room {
             self.owner = Some(id.clone());
         }
         self.players.insert(
-            id,
+            id.clone(),
             PlayerRecord {
                 address: addr,
                 state: PlayerState::Spectator,
             },
+        );
+        info!(
+            target: "multisweeper.room.player_joined",
+            room_code = %self.code,
+            player_id = %id,
+            player_state = "spectator",
+            "player joined room"
         );
     }
 
@@ -249,6 +263,13 @@ impl Room {
         if let RoomMatchState::Playing(active_match) = &mut self.match_state {
             active_match.last_player = Some(current_player);
             active_match.current_player = next_player;
+            info!(
+                target: "multisweeper.room.turn_changed",
+                room_code = %self.code,
+                player_id = %active_match.current_player,
+                previous_player = ?active_match.last_player,
+                "turn changed"
+            );
         }
         Ok(())
     }
@@ -259,6 +280,12 @@ impl Room {
             .get_mut(id)
             .ok_or_else(|| RoomError::NoPlayerFound(id.clone()))?;
         player.state = PlayerState::Eliminated;
+        info!(
+            target: "multisweeper.room.player_eliminated",
+            room_code = %self.code,
+            player_id = %id,
+            "player eliminated"
+        );
         Ok(())
     }
 
@@ -278,14 +305,27 @@ impl Room {
         self.match_state = RoomMatchState::NoWinner {
             final_snapshot: active_match.game.snapshot().clone(),
         };
+        info!(
+            target: "multisweeper.room.match_finished",
+            room_code = %self.code,
+            outcome = "no_winner",
+            "match finished"
+        );
         Ok(())
     }
 
+    #[tracing::instrument(name = "room.lifecycle", skip_all, fields(room_code = %self.code))]
     pub async fn handle_connection(mut self) -> Result<()> {
-        match self.event_loop().await {
-            Ok(()) => Ok(()),
-            Err(e) => Err(e),
+        let result = self.event_loop().await;
+        if let Err(error) = &result {
+            error!(
+                target: "multisweeper.room.failed",
+                room_code = %self.code,
+                error = %error,
+                "room task terminated with an error"
+            );
         }
+        result
     }
 
     async fn event_loop(&mut self) -> Result<()> {
@@ -351,6 +391,13 @@ impl Room {
 
     async fn handle_mailbox(&mut self, msg: RoomMessage) -> Result<(), Vec<RoomError>> {
         let player_id = msg.id.clone();
+        debug!(
+            target: "multisweeper.room.command_received",
+            room_code = %self.code,
+            player_id = %player_id,
+            command = player_command_name(&msg.command),
+            "room command received"
+        );
         let mut errs = Vec::new();
         match msg.command {
             PlayerCommand::Join { handle } => {
@@ -396,7 +443,7 @@ impl Room {
                             RoomMatchState::Waiting => RoomError::NoGame,
                             RoomMatchState::Won { .. } | RoomMatchState::NoWinner { .. } => {
                                 RoomError::GameEnded
-                            },
+                            }
                             RoomMatchState::Playing(_) => unreachable!(),
                         });
                     };
@@ -430,6 +477,12 @@ impl Room {
                                     self.match_state = RoomMatchState::Won {
                                         final_snapshot: active_match.game.snapshot().clone(),
                                     };
+                                    info!(
+                                        target: "multisweeper.room.match_finished",
+                                        room_code = %self.code,
+                                        outcome = "won",
+                                        "match finished"
+                                    );
                                 } else {
                                     self.match_state = match_state;
                                     errs.push(RoomError::GameEnded);
@@ -450,7 +503,16 @@ impl Room {
                             }
                         }
                     }
-                    Err(error) => self.send_player_error(&player_id, error.to_string()).await,
+                    Err(error) => {
+                        debug!(
+                            target: "multisweeper.room.action_rejected",
+                            room_code = %self.code,
+                            player_id = %player_id,
+                            error_type = room_error_name(&error),
+                            "game action rejected"
+                        );
+                        self.send_player_error(&player_id, error.to_string()).await;
+                    }
                 }
             }
             PlayerCommand::GameQuery => match self.state() {
@@ -486,6 +548,13 @@ impl Room {
             self.owner = self.players.keys().next().cloned();
         }
 
+        info!(
+            target: "multisweeper.room.player_left",
+            room_code = %self.code,
+            player_id = %id,
+            "player left room"
+        );
+
         if let RoomMatchState::Playing(active_match) = &self.match_state
             && &active_match.current_player == id
         {
@@ -499,7 +568,18 @@ impl Room {
         Ok(record.address)
     }
 
+    #[tracing::instrument(
+        name = "room.broadcast_state",
+        skip_all,
+        fields(room_code = %self.code)
+    )]
     async fn broadcast_state(&mut self) -> Result<(), Vec<RoomError>> {
+        debug!(
+            target: "multisweeper.room.state_broadcast",
+            room_code = %self.code,
+            player_count = self.players.len(),
+            "room state broadcast"
+        );
         let state = match self.state() {
             Ok(state) => state,
             Err(err) => return Err(vec![err]),
@@ -511,6 +591,11 @@ impl Room {
         }
     }
 
+    #[tracing::instrument(
+        name = "room.broadcast_message",
+        skip_all,
+        fields(room_code = %self.code)
+    )]
     async fn broadcast_message(&mut self, msg: SessionMessage) -> Result<(), Vec<RoomError>> {
         let ids: Vec<PlayerId> = self.players.keys().map(ToString::to_string).collect();
         let mut errors = Vec::new();
@@ -528,6 +613,11 @@ impl Room {
         }
     }
 
+    #[tracing::instrument(
+        name = "room.send_player",
+        skip_all,
+        fields(room_code = %self.code, player_id = %id)
+    )]
     async fn send_player(&mut self, id: &PlayerId, msg: SessionMessage) -> Result<(), RoomError> {
         let addr = match self.players.get_mut(id) {
             Some(addr) => addr,
@@ -536,11 +626,47 @@ impl Room {
 
         match addr.address.send(msg).await {
             Ok(()) => Ok(()),
-            Err(_e) => Err(RoomError::PlayerDropped(id.clone())),
+            Err(_error) => {
+                warn!(
+                    target: "multisweeper.room.player_delivery_failed",
+                    room_code = %self.code,
+                    player_id = %id,
+                    error_type = "player_dropped",
+                    "player mailbox delivery failed"
+                );
+                Err(RoomError::PlayerDropped(id.clone()))
+            }
         }
     }
 
     async fn send_player_error(&mut self, id: &PlayerId, reason: String) {
         let _ = self.send_player(id, SessionMessage::Error { reason }).await;
+    }
+}
+
+fn player_command_name(command: &PlayerCommand) -> &'static str {
+    match command {
+        PlayerCommand::Join { .. } => "join",
+        PlayerCommand::Leave => "leave",
+        PlayerCommand::StartGame { .. } => "start_game",
+        PlayerCommand::GameAction { .. } => "game_action",
+        PlayerCommand::GameQuery => "game_query",
+    }
+}
+
+fn room_error_name(error: &RoomError) -> &'static str {
+    match error {
+        RoomError::MailboxDropped => "mailbox_dropped",
+        RoomError::PlayerDropped(_) => "player_dropped",
+        RoomError::NoPlayerFound(_) => "no_player_found",
+        RoomError::NotOwner => "not_owner",
+        RoomError::GameAlreadyStarted => "game_already_started",
+        RoomError::NoGame => "no_game",
+        RoomError::GameEnded => "game_ended",
+        RoomError::PlayerIsSpectating(_) => "player_is_spectating",
+        RoomError::PlayerEliminated(_) => "player_eliminated",
+        RoomError::PlayerNotCurrent(_) => "player_not_current",
+        RoomError::AllPlayersDropped => "all_players_dropped",
+        RoomError::Game(_) => "game_error",
     }
 }
