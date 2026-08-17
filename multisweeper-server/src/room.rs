@@ -564,13 +564,6 @@ impl Room {
             "player left room"
         );
 
-        info!(
-            target: "multisweeper.room.status",
-            room_code = %self.code,
-            "{0} players remaining in room",
-            self.players.len()
-        );
-
         if let RoomMatchState::Playing(active_match) = &self.match_state
             && &active_match.current_player == id
         {
