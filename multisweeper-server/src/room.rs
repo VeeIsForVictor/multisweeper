@@ -266,7 +266,7 @@ impl Room {
             info!(
                 target: "multisweeper.room.turn_changed",
                 room_code = %self.code,
-                player_id = %active_match.current_player,
+                current_player = %active_match.current_player,
                 previous_player = ?active_match.last_player,
                 "turn changed"
             );
