@@ -21,6 +21,7 @@ pub enum ClientRequest {
 }
 
 #[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(tag = "action")]
 pub enum ClientGameAction {
     Reveal { x: u8, y: u8 },
     Flag { x: u8, y: u8 },

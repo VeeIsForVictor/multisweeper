@@ -390,62 +390,54 @@
           {
             "type": "object",
             "properties": {
-              "Reveal": {
-                "type": "object",
-                "properties": {
-                  "x": {
-                    "type": "integer",
-                    "format": "uint8",
-                    "maximum": 255,
-                    "minimum": 0
-                  },
-                  "y": {
-                    "type": "integer",
-                    "format": "uint8",
-                    "maximum": 255,
-                    "minimum": 0
-                  }
-                },
-                "required": [
-                  "x",
-                  "y"
-                ]
+              "action": {
+                "type": "string",
+                "const": "Reveal"
+              },
+              "x": {
+                "type": "integer",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0
+              },
+              "y": {
+                "type": "integer",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0
               }
             },
             "required": [
-              "Reveal"
-            ],
-            "additionalProperties": false
+              "action",
+              "x",
+              "y"
+            ]
           },
           {
             "type": "object",
             "properties": {
-              "Flag": {
-                "type": "object",
-                "properties": {
-                  "x": {
-                    "type": "integer",
-                    "format": "uint8",
-                    "maximum": 255,
-                    "minimum": 0
-                  },
-                  "y": {
-                    "type": "integer",
-                    "format": "uint8",
-                    "maximum": 255,
-                    "minimum": 0
-                  }
-                },
-                "required": [
-                  "x",
-                  "y"
-                ]
+              "action": {
+                "type": "string",
+                "const": "Flag"
+              },
+              "x": {
+                "type": "integer",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0
+              },
+              "y": {
+                "type": "integer",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0
               }
             },
             "required": [
-              "Flag"
-            ],
-            "additionalProperties": false
+              "action",
+              "x",
+              "y"
+            ]
           }
         ]
       },
