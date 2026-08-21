@@ -24,7 +24,7 @@ use crate::{
         registry::RegistryMessage,
         room::{PlayerCommand, RequestContext, RoomMessage},
         session::{ClientError, ErrorCode, MessageId, SessionMessage},
-        wire::{ClientRequest, ServerMessage, next_message_id},
+        wire::{ClientRequest, ServerMessage},
     },
     registry::{RegistryAddr, RegistryError},
     room::{RoomAddr, RoomCode},
@@ -83,6 +83,7 @@ pub struct Session {
     registry_addr: RegistryAddr,
     room: Option<RoomAddr>,
     seen_message_ids: HashSet<MessageId>,
+    message_counter: u64,
 }
 
 impl Session {
@@ -102,6 +103,7 @@ impl Session {
             registry_addr,
             room: None,
             seen_message_ids: HashSet::new(),
+            message_counter: 0,
         }
     }
 
@@ -115,8 +117,9 @@ impl Session {
 
     #[tracing::instrument(name = "session.lifecycle", skip_all, fields(player_id = %self.id))]
     pub async fn handle_connections(mut self) -> Result<()> {
+        let message_id = self.next_message_id();
         self.send_outbound(ServerMessage::ConnectionReady {
-            message_id: next_message_id(),
+            message_id,
             player_id: self.id.clone(),
         })
         .await?;
@@ -240,12 +243,15 @@ impl Session {
             "client request received"
         );
         match request {
-            ClientRequest::ConnectionPing { message_id } => Ok(self
-                .send_outbound(ServerMessage::ConnectionPong {
-                    message_id: next_message_id(),
-                    correlation_id: message_id,
-                })
-                .await?),
+            ClientRequest::ConnectionPing { message_id } => {
+                let response_message_id = self.next_message_id();
+                Ok(self
+                    .send_outbound(ServerMessage::ConnectionPong {
+                        message_id: response_message_id,
+                        correlation_id: message_id,
+                    })
+                    .await?)
+            }
             ClientRequest::RoomCreate { message_id } => {
                 if self.room.is_some() {
                     return self
@@ -371,9 +377,10 @@ impl Session {
                             .await;
                     }
                 };
+                let response_message_id = self.next_message_id();
                 Ok(self
                     .send_outbound(ServerMessage::RoomsListed {
-                        message_id: next_message_id(),
+                        message_id: response_message_id,
                         correlation_id: message_id,
                         rooms,
                     })
@@ -447,7 +454,9 @@ impl Session {
         ) {
             self.room = None;
         }
-        self.send_outbound(message.into()).await?;
+        let response_message_id = self.next_message_id();
+        self.send_outbound(ServerMessage::from_session(response_message_id, message))
+            .await?;
 
         Ok(())
     }
@@ -457,8 +466,9 @@ impl Session {
         correlation_id: Option<MessageId>,
         error: ClientError,
     ) -> Result<()> {
+        let response_message_id = self.next_message_id();
         self.send_outbound(ServerMessage::CommandRejected {
-            message_id: next_message_id(),
+            message_id: response_message_id,
             correlation_id,
             error,
         })
@@ -475,6 +485,11 @@ impl Session {
         );
         self.outbound.send(response.try_into()?).await?;
         Ok(())
+    }
+
+    fn next_message_id(&mut self) -> MessageId {
+        self.message_counter += 1;
+        format!("s-{}-{:016x}", self.id, self.message_counter)
     }
 
     #[tracing::instrument(name = "session.send_room_command", skip_all, fields(player_id = %self.id))]
@@ -517,9 +532,8 @@ impl Session {
 
     async fn terminate(mut self) {
         if self.room.is_some() {
-            let _ = self
-                .send_room(next_message_id(), PlayerCommand::Leave)
-                .await;
+            let message_id = self.next_message_id();
+            let _ = self.send_room(message_id, PlayerCommand::Leave).await;
         }
         let _ = self.outbound.close().await;
     }

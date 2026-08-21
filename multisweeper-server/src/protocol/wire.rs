@@ -1,5 +1,3 @@
-use std::sync::atomic::{AtomicU64, Ordering};
-
 use asyncapi_rust::{ToAsyncApiMessage, schemars::JsonSchema};
 use multisweeper_core::{GameAction, GameDifficulty};
 use serde::{Deserialize, Serialize};
@@ -10,12 +8,6 @@ use crate::{
     room::RoomCode,
     session::PlayerId,
 };
-
-static NEXT_MESSAGE_ID: AtomicU64 = AtomicU64::new(1);
-
-pub fn next_message_id() -> MessageId {
-    format!("s-{}", NEXT_MESSAGE_ID.fetch_add(1, Ordering::Relaxed))
-}
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema, ToAsyncApiMessage)]
 #[serde(tag = "type")]
@@ -143,9 +135,8 @@ pub enum ServerMessage {
     },
 }
 
-impl From<SessionMessage> for ServerMessage {
-    fn from(value: SessionMessage) -> Self {
-        let message_id = next_message_id();
+impl ServerMessage {
+    pub fn from_session(message_id: MessageId, value: SessionMessage) -> Self {
         let (correlation_id, value) = match value {
             SessionMessage::Reply {
                 request_id,
@@ -264,11 +255,17 @@ mod tests {
 
     #[test]
     fn replies_preserve_request_ids_but_broadcasts_are_uncorrelated() {
-        let reply = ServerMessage::from(SessionMessage::Reply {
-            request_id: "req-1".to_string(),
-            message: SessionEvent::GameStarted,
-        });
-        let broadcast = ServerMessage::from(SessionMessage::Broadcast(SessionEvent::GameStarted));
+        let reply = ServerMessage::from_session(
+            "m-1".to_string(),
+            SessionMessage::Reply {
+                request_id: "req-1".to_string(),
+                message: SessionEvent::GameStarted,
+            },
+        );
+        let broadcast = ServerMessage::from_session(
+            "m-2".to_string(),
+            SessionMessage::Broadcast(SessionEvent::GameStarted),
+        );
 
         let reply_json = serde_json::to_value(reply).expect("reply should serialize");
         let broadcast_json = serde_json::to_value(broadcast).expect("broadcast should serialize");
