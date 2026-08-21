@@ -58,8 +58,18 @@ impl Registry {
         self.generate_name("P")
     }
 
+    fn generate_lobby_code(&self) -> RoomCode {
+        loop {
+            let candidate = petname::petname(2, "-")
+                .expect("the built-in petname dictionaries must contain words");
+            if !self.rooms.contains_key(&candidate) {
+                return candidate;
+            }
+        }
+    }
+
     async fn register_lobby(&mut self) -> (String, RoomAddr) {
-        let code = self.generate_name("L");
+        let code = self.generate_lobby_code();
         let room = Room::new(code.clone());
         let room_handle = &room.request_handle();
         tokio::spawn(room.handle_connection());
