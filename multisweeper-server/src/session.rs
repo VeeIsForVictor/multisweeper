@@ -489,7 +489,7 @@ impl Session {
 
     fn next_message_id(&mut self) -> MessageId {
         self.message_counter += 1;
-        format!("s-{}-{:016x}", self.id, self.message_counter)
+        return format!("s-{}-{:016x}", self.id, self.message_counter);
     }
 
     #[tracing::instrument(name = "session.send_room_command", skip_all, fields(player_id = %self.id))]
