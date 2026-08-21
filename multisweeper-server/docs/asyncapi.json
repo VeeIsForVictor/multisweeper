@@ -1,497 +1,601 @@
 {
   "asyncapi": "3.0.0",
-  "info": {
-    "title": "Multisweeper WebSocket API",
-    "version": "0.1.0",
-    "description": "Real-time room and Minesweeper messages exchanged over WebSocket."
-  },
-  "servers": {
-    "local": {
-      "host": "localhost:8080",
-      "protocol": "ws",
-      "description": "Local Multisweeper server"
-    }
-  },
   "channels": {
     "multisweeper": {
       "address": "/",
       "messages": {
-        "Ping": {
-          "$ref": "#/components/messages/Ping"
+        "CommandRejected": {
+          "$ref": "#/components/messages/CommandRejected"
         },
-        "QueryRooms": {
-          "$ref": "#/components/messages/QueryRooms"
+        "ConnectionPing": {
+          "$ref": "#/components/messages/ConnectionPing"
         },
-        "JoinRoom": {
-          "$ref": "#/components/messages/JoinRoom"
+        "ConnectionPong": {
+          "$ref": "#/components/messages/ConnectionPong"
         },
-        "CreateRoom": {
-          "$ref": "#/components/messages/CreateRoom"
-        },
-        "LeaveRoom": {
-          "$ref": "#/components/messages/LeaveRoom"
-        },
-        "StartGame": {
-          "$ref": "#/components/messages/StartGame"
+        "ConnectionReady": {
+          "$ref": "#/components/messages/ConnectionReady"
         },
         "GameAction": {
           "$ref": "#/components/messages/GameAction"
         },
-        "GameQuery": {
-          "$ref": "#/components/messages/GameQuery"
+        "GameStart": {
+          "$ref": "#/components/messages/GameStart"
         },
-        "Pong": {
-          "$ref": "#/components/messages/Pong"
+        "GameStarted": {
+          "$ref": "#/components/messages/GameStarted"
         },
-        "AdvertiseRooms": {
-          "$ref": "#/components/messages/AdvertiseRooms"
+        "RoomCreate": {
+          "$ref": "#/components/messages/RoomCreate"
         },
-        "ClientError": {
-          "$ref": "#/components/messages/ClientError"
+        "RoomJoin": {
+          "$ref": "#/components/messages/RoomJoin"
         },
-        "Message": {
-          "$ref": "#/components/messages/Message"
+        "RoomLeave": {
+          "$ref": "#/components/messages/RoomLeave"
+        },
+        "RoomRemoved": {
+          "$ref": "#/components/messages/RoomRemoved"
+        },
+        "RoomState": {
+          "$ref": "#/components/messages/RoomState"
+        },
+        "RoomStateGet": {
+          "$ref": "#/components/messages/RoomStateGet"
+        },
+        "RoomsList": {
+          "$ref": "#/components/messages/RoomsList"
+        },
+        "RoomsListed": {
+          "$ref": "#/components/messages/RoomsListed"
         }
       }
-    }
-  },
-  "operations": {
-    "clientMessages": {
-      "action": "receive",
-      "channel": {
-        "$ref": "#/channels/multisweeper"
-      },
-      "messages": [
-        {
-          "$ref": "#/channels/multisweeper/messages/Ping"
-        },
-        {
-          "$ref": "#/channels/multisweeper/messages/QueryRooms"
-        },
-        {
-          "$ref": "#/channels/multisweeper/messages/JoinRoom"
-        },
-        {
-          "$ref": "#/channels/multisweeper/messages/CreateRoom"
-        },
-        {
-          "$ref": "#/channels/multisweeper/messages/LeaveRoom"
-        },
-        {
-          "$ref": "#/channels/multisweeper/messages/StartGame"
-        },
-        {
-          "$ref": "#/channels/multisweeper/messages/GameAction"
-        },
-        {
-          "$ref": "#/channels/multisweeper/messages/GameQuery"
-        }
-      ]
-    },
-    "serverMessages": {
-      "action": "send",
-      "channel": {
-        "$ref": "#/channels/multisweeper"
-      },
-      "messages": [
-        {
-          "$ref": "#/channels/multisweeper/messages/Pong"
-        },
-        {
-          "$ref": "#/channels/multisweeper/messages/AdvertiseRooms"
-        },
-        {
-          "$ref": "#/channels/multisweeper/messages/ClientError"
-        },
-        {
-          "$ref": "#/channels/multisweeper/messages/Message"
-        }
-      ]
     }
   },
   "components": {
     "messages": {
-      "Ping": {
-        "name": "Ping",
-        "title": "Ping",
+      "CommandRejected": {
         "contentType": "application/json",
+        "correlationId": {
+          "description": "The message_id of the client command that caused this server message, when applicable.",
+          "location": "$message.payload#/correlation_id"
+        },
+        "name": "CommandRejected",
         "payload": {
-          "type": "object",
           "properties": {
-            "type": {
-              "type": "string",
-              "const": "Ping"
-            }
-          },
-          "required": [
-            "type"
-          ]
-        }
-      },
-      "QueryRooms": {
-        "name": "QueryRooms",
-        "title": "QueryRooms",
-        "contentType": "application/json",
-        "payload": {
-          "type": "object",
-          "properties": {
-            "type": {
-              "type": "string",
-              "const": "QueryRooms"
-            }
-          },
-          "required": [
-            "type"
-          ]
-        }
-      },
-      "JoinRoom": {
-        "name": "JoinRoom",
-        "title": "JoinRoom",
-        "contentType": "application/json",
-        "payload": {
-          "type": "object",
-          "properties": {
-            "payload": {
-              "type": "object",
-              "properties": {
-                "room_code": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "room_code"
+            "correlation_id": {
+              "type": [
+                "string",
+                "null"
               ]
             },
-            "type": {
-              "type": "string",
-              "const": "JoinRoom"
-            }
-          },
-          "required": [
-            "type",
-            "payload"
-          ]
-        }
-      },
-      "CreateRoom": {
-        "name": "CreateRoom",
-        "title": "CreateRoom",
-        "contentType": "application/json",
-        "payload": {
-          "type": "object",
-          "properties": {
-            "type": {
-              "type": "string",
-              "const": "CreateRoom"
-            }
-          },
-          "required": [
-            "type"
-          ]
-        }
-      },
-      "LeaveRoom": {
-        "name": "LeaveRoom",
-        "title": "LeaveRoom",
-        "contentType": "application/json",
-        "payload": {
-          "type": "object",
-          "properties": {
-            "type": {
-              "type": "string",
-              "const": "LeaveRoom"
-            }
-          },
-          "required": [
-            "type"
-          ]
-        }
-      },
-      "StartGame": {
-        "name": "StartGame",
-        "title": "StartGame",
-        "contentType": "application/json",
-        "payload": {
-          "type": "object",
-          "properties": {
-            "payload": {
-              "type": "object",
-              "properties": {
-                "difficulty": {
-                  "$ref": "#/components/schemas/ClientDifficulty"
-                }
-              },
-              "required": [
-                "difficulty"
-              ]
+            "error": {
+              "$ref": "#/components/schemas/ClientError"
             },
-            "type": {
-              "type": "string",
-              "const": "StartGame"
-            }
-          },
-          "required": [
-            "type",
-            "payload"
-          ]
-        }
-      },
-      "GameAction": {
-        "name": "GameAction",
-        "title": "GameAction",
-        "contentType": "application/json",
-        "payload": {
-          "type": "object",
-          "properties": {
-            "payload": {
-              "type": "object",
-              "properties": {
-                "action": {
-                  "$ref": "#/components/schemas/ClientGameAction"
-                }
-              },
-              "required": [
-                "action"
-              ]
-            },
-            "type": {
-              "type": "string",
-              "const": "GameAction"
-            }
-          },
-          "required": [
-            "type",
-            "payload"
-          ]
-        }
-      },
-      "GameQuery": {
-        "name": "GameQuery",
-        "title": "GameQuery",
-        "contentType": "application/json",
-        "payload": {
-          "type": "object",
-          "properties": {
-            "type": {
-              "type": "string",
-              "const": "GameQuery"
-            }
-          },
-          "required": [
-            "type"
-          ]
-        }
-      },
-      "Pong": {
-        "name": "Pong",
-        "title": "Pong",
-        "contentType": "application/json",
-        "payload": {
-          "type": "object",
-          "properties": {
-            "type": {
-              "type": "string",
-              "const": "Pong"
-            }
-          },
-          "required": [
-            "type"
-          ]
-        }
-      },
-      "AdvertiseRooms": {
-        "name": "AdvertiseRooms",
-        "title": "AdvertiseRooms",
-        "contentType": "application/json",
-        "payload": {
-          "type": "object",
-          "properties": {
-            "payload": {
-              "type": "object",
-              "properties": {
-                "rooms": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                }
-              },
-              "required": [
-                "rooms"
-              ]
-            },
-            "type": {
-              "type": "string",
-              "const": "AdvertiseRooms"
-            }
-          },
-          "required": [
-            "type",
-            "payload"
-          ]
-        }
-      },
-      "ClientError": {
-        "name": "ClientError",
-        "title": "ClientError",
-        "contentType": "application/json",
-        "payload": {
-          "type": "object",
-          "properties": {
-            "payload": {
+            "message_id": {
               "type": "string"
             },
             "type": {
-              "type": "string",
-              "const": "ClientError"
+              "const": "command.rejected",
+              "type": "string"
             }
           },
           "required": [
             "type",
-            "payload"
-          ]
-        }
+            "message_id",
+            "error"
+          ],
+          "type": "object"
+        },
+        "title": "CommandRejected"
       },
-      "Message": {
-        "name": "Message",
-        "title": "Message",
+      "ConnectionPing": {
         "contentType": "application/json",
+        "name": "ConnectionPing",
         "payload": {
-          "type": "object",
           "properties": {
-            "payload": {
-              "$ref": "#/components/schemas/SessionMessage"
+            "message_id": {
+              "type": "string"
             },
             "type": {
-              "type": "string",
-              "const": "Message"
+              "const": "connection.ping",
+              "type": "string"
             }
           },
           "required": [
             "type",
-            "payload"
-          ]
-        }
+            "message_id"
+          ],
+          "type": "object"
+        },
+        "title": "ConnectionPing"
+      },
+      "ConnectionPong": {
+        "contentType": "application/json",
+        "correlationId": {
+          "description": "The message_id of the client command that caused this server message, when applicable.",
+          "location": "$message.payload#/correlation_id"
+        },
+        "name": "ConnectionPong",
+        "payload": {
+          "properties": {
+            "correlation_id": {
+              "type": "string"
+            },
+            "message_id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "connection.pong",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "message_id",
+            "correlation_id"
+          ],
+          "type": "object"
+        },
+        "title": "ConnectionPong"
+      },
+      "ConnectionReady": {
+        "contentType": "application/json",
+        "name": "ConnectionReady",
+        "payload": {
+          "properties": {
+            "message_id": {
+              "type": "string"
+            },
+            "player_id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "connection.ready",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "message_id",
+            "player_id"
+          ],
+          "type": "object"
+        },
+        "title": "ConnectionReady"
+      },
+      "GameAction": {
+        "contentType": "application/json",
+        "name": "GameAction",
+        "payload": {
+          "properties": {
+            "action": {
+              "$ref": "#/components/schemas/ClientGameAction"
+            },
+            "message_id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "game.action",
+              "type": "string"
+            },
+            "x": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "y": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "type",
+            "message_id",
+            "action",
+            "x",
+            "y"
+          ],
+          "type": "object"
+        },
+        "title": "GameAction"
+      },
+      "GameStart": {
+        "contentType": "application/json",
+        "name": "GameStart",
+        "payload": {
+          "properties": {
+            "difficulty": {
+              "$ref": "#/components/schemas/ClientDifficulty"
+            },
+            "message_id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "game.start",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "message_id",
+            "difficulty"
+          ],
+          "type": "object"
+        },
+        "title": "GameStart"
+      },
+      "GameStarted": {
+        "contentType": "application/json",
+        "correlationId": {
+          "description": "The message_id of the client command that caused this server message, when applicable.",
+          "location": "$message.payload#/correlation_id"
+        },
+        "name": "GameStarted",
+        "payload": {
+          "properties": {
+            "correlation_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "message_id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "game.started",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "message_id"
+          ],
+          "type": "object"
+        },
+        "title": "GameStarted"
+      },
+      "RoomCreate": {
+        "contentType": "application/json",
+        "name": "RoomCreate",
+        "payload": {
+          "properties": {
+            "message_id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "room.create",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "message_id"
+          ],
+          "type": "object"
+        },
+        "title": "RoomCreate"
+      },
+      "RoomJoin": {
+        "contentType": "application/json",
+        "name": "RoomJoin",
+        "payload": {
+          "properties": {
+            "message_id": {
+              "type": "string"
+            },
+            "room_code": {
+              "type": "string"
+            },
+            "type": {
+              "const": "room.join",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "message_id",
+            "room_code"
+          ],
+          "type": "object"
+        },
+        "title": "RoomJoin"
+      },
+      "RoomLeave": {
+        "contentType": "application/json",
+        "name": "RoomLeave",
+        "payload": {
+          "properties": {
+            "message_id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "room.leave",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "message_id"
+          ],
+          "type": "object"
+        },
+        "title": "RoomLeave"
+      },
+      "RoomRemoved": {
+        "contentType": "application/json",
+        "correlationId": {
+          "description": "The message_id of the client command that caused this server message, when applicable.",
+          "location": "$message.payload#/correlation_id"
+        },
+        "name": "RoomRemoved",
+        "payload": {
+          "properties": {
+            "correlation_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "message_id": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string"
+            },
+            "type": {
+              "const": "room.removed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "message_id",
+            "reason"
+          ],
+          "type": "object"
+        },
+        "title": "RoomRemoved"
+      },
+      "RoomState": {
+        "contentType": "application/json",
+        "correlationId": {
+          "description": "The message_id of the client command that caused this server message, when applicable.",
+          "location": "$message.payload#/correlation_id"
+        },
+        "name": "RoomState",
+        "payload": {
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "correlation_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "game": {
+              "$ref": "#/components/schemas/MatchView"
+            },
+            "message_id": {
+              "type": "string"
+            },
+            "owner": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "players": {
+              "items": {
+                "$ref": "#/components/schemas/PlayerView"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "room.state",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "message_id",
+            "code",
+            "players",
+            "game"
+          ],
+          "type": "object"
+        },
+        "title": "RoomState"
+      },
+      "RoomStateGet": {
+        "contentType": "application/json",
+        "name": "RoomStateGet",
+        "payload": {
+          "properties": {
+            "message_id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "room.state.get",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "message_id"
+          ],
+          "type": "object"
+        },
+        "title": "RoomStateGet"
+      },
+      "RoomsList": {
+        "contentType": "application/json",
+        "name": "RoomsList",
+        "payload": {
+          "properties": {
+            "message_id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "rooms.list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "message_id"
+          ],
+          "type": "object"
+        },
+        "title": "RoomsList"
+      },
+      "RoomsListed": {
+        "contentType": "application/json",
+        "correlationId": {
+          "description": "The message_id of the client command that caused this server message, when applicable.",
+          "location": "$message.payload#/correlation_id"
+        },
+        "name": "RoomsListed",
+        "payload": {
+          "properties": {
+            "correlation_id": {
+              "type": "string"
+            },
+            "message_id": {
+              "type": "string"
+            },
+            "rooms": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "rooms.listed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "message_id",
+            "correlation_id",
+            "rooms"
+          ],
+          "type": "object"
+        },
+        "title": "RoomsListed"
       }
     },
     "schemas": {
-      "ClientDifficulty": {
-        "type": "string",
-        "enum": [
-          "Test",
-          "Easy",
-          "Medium",
-          "Hard"
-        ]
-      },
-      "ClientGameAction": {
-        "oneOf": [
-          {
-            "type": "object",
-            "properties": {
-              "action": {
-                "type": "string",
-                "const": "Reveal"
-              },
-              "x": {
-                "type": "integer",
-                "format": "uint8",
-                "maximum": 255,
-                "minimum": 0
-              },
-              "y": {
-                "type": "integer",
-                "format": "uint8",
-                "maximum": 255,
-                "minimum": 0
-              }
-            },
-            "required": [
-              "action",
-              "x",
-              "y"
-            ]
-          },
-          {
-            "type": "object",
-            "properties": {
-              "action": {
-                "type": "string",
-                "const": "Flag"
-              },
-              "x": {
-                "type": "integer",
-                "format": "uint8",
-                "maximum": 255,
-                "minimum": 0
-              },
-              "y": {
-                "type": "integer",
-                "format": "uint8",
-                "maximum": 255,
-                "minimum": 0
-              }
-            },
-            "required": [
-              "action",
-              "x",
-              "y"
-            ]
-          }
-        ]
-      },
       "CellView": {
         "oneOf": [
           {
-            "type": "string",
             "enum": [
               "HiddenCell",
               "FlaggedCell",
               "MinedCell"
-            ]
+            ],
+            "type": "string"
           },
           {
-            "type": "object",
+            "additionalProperties": false,
             "properties": {
               "VisibleCell": {
-                "type": "integer",
                 "format": "uint8",
                 "maximum": 255,
-                "minimum": 0
+                "minimum": 0,
+                "type": "integer"
               }
             },
             "required": [
               "VisibleCell"
             ],
-            "additionalProperties": false
+            "type": "object"
           }
         ]
       },
+      "ClientDifficulty": {
+        "enum": [
+          "Test",
+          "Easy",
+          "Medium",
+          "Hard"
+        ],
+        "type": "string"
+      },
+      "ClientError": {
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ErrorCode"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "ClientGameAction": {
+        "enum": [
+          "reveal",
+          "flag"
+        ],
+        "type": "string"
+      },
+      "ErrorCode": {
+        "enum": [
+          "room_already_joined",
+          "no_room_joined",
+          "room_dropped",
+          "room_not_found",
+          "not_room_owner",
+          "game_already_started",
+          "game_not_started",
+          "game_ended",
+          "player_is_spectating",
+          "player_eliminated",
+          "not_current_player",
+          "no_players_remaining",
+          "player_not_found",
+          "game_error",
+          "room_unavailable",
+          "invalid_message",
+          "duplicate_message_id"
+        ],
+        "type": "string"
+      },
       "GameActionResult": {
-        "type": "string",
         "enum": [
           "Applied",
           "Stalled",
           "Started",
           "Eliminated",
           "Won"
-        ]
+        ],
+        "type": "string"
       },
       "GameSnapshot": {
-        "type": "object",
         "properties": {
           "action_result": {
             "$ref": "#/components/schemas/GameActionResult"
           },
           "board": {
-            "type": "array",
             "items": {
-              "type": "array",
               "items": {
                 "$ref": "#/components/schemas/CellView"
-              }
-            }
+              },
+              "type": "array"
+            },
+            "type": "array"
           },
           "status": {
             "$ref": "#/components/schemas/GameStatus"
@@ -501,31 +605,31 @@
           "status",
           "action_result",
           "board"
-        ]
+        ],
+        "type": "object"
       },
       "GameStatus": {
-        "type": "string",
         "enum": [
           "Won",
           "NoWinner",
           "Playing"
-        ]
+        ],
+        "type": "string"
       },
       "MatchState": {
         "oneOf": [
           {
-            "type": "string",
             "enum": [
               "Waiting",
               "Won",
               "NoWinner"
-            ]
+            ],
+            "type": "string"
           },
           {
-            "type": "object",
+            "additionalProperties": false,
             "properties": {
               "Playing": {
-                "type": "object",
                 "properties": {
                   "current_player": {
                     "type": "string"
@@ -539,18 +643,18 @@
                 },
                 "required": [
                   "current_player"
-                ]
+                ],
+                "type": "object"
               }
             },
             "required": [
               "Playing"
             ],
-            "additionalProperties": false
+            "type": "object"
           }
         ]
       },
       "MatchView": {
-        "type": "object",
         "properties": {
           "game": {
             "anyOf": [
@@ -568,18 +672,18 @@
         },
         "required": [
           "state"
-        ]
+        ],
+        "type": "object"
       },
       "PlayerState": {
-        "type": "string",
         "enum": [
           "Spectator",
           "Playing",
           "Eliminated"
-        ]
+        ],
+        "type": "string"
       },
       "PlayerView": {
-        "type": "object",
         "properties": {
           "id": {
             "type": "string"
@@ -591,95 +695,84 @@
         "required": [
           "id",
           "state"
-        ]
-      },
-      "SessionMessage": {
-        "oneOf": [
-          {
-            "type": "string",
-            "enum": [
-              "GameStarted"
-            ]
-          },
-          {
-            "type": "object",
-            "properties": {
-              "RoomState": {
-                "type": "object",
-                "properties": {
-                  "code": {
-                    "type": "string"
-                  },
-                  "game": {
-                    "$ref": "#/components/schemas/MatchView"
-                  },
-                  "owner": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "players": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/PlayerView"
-                    }
-                  }
-                },
-                "required": [
-                  "code",
-                  "players",
-                  "game"
-                ]
-              }
-            },
-            "required": [
-              "RoomState"
-            ],
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "properties": {
-              "Kicked": {
-                "type": "object",
-                "properties": {
-                  "reason": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "reason"
-                ]
-              }
-            },
-            "required": [
-              "Kicked"
-            ],
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "properties": {
-              "Error": {
-                "type": "object",
-                "properties": {
-                  "reason": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "reason"
-                ]
-              }
-            },
-            "required": [
-              "Error"
-            ],
-            "additionalProperties": false
-          }
-        ]
+        ],
+        "type": "object"
       }
+    }
+  },
+  "info": {
+    "description": "Real-time room and Minesweeper messages exchanged over WebSocket.",
+    "title": "Multisweeper WebSocket API",
+    "version": "0.1.0"
+  },
+  "operations": {
+    "clientMessages": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/multisweeper"
+      },
+      "messages": [
+        {
+          "$ref": "#/channels/multisweeper/messages/ConnectionPing"
+        },
+        {
+          "$ref": "#/channels/multisweeper/messages/RoomsList"
+        },
+        {
+          "$ref": "#/channels/multisweeper/messages/RoomJoin"
+        },
+        {
+          "$ref": "#/channels/multisweeper/messages/RoomCreate"
+        },
+        {
+          "$ref": "#/channels/multisweeper/messages/RoomLeave"
+        },
+        {
+          "$ref": "#/channels/multisweeper/messages/GameStart"
+        },
+        {
+          "$ref": "#/channels/multisweeper/messages/GameAction"
+        },
+        {
+          "$ref": "#/channels/multisweeper/messages/RoomStateGet"
+        }
+      ]
+    },
+    "serverMessages": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/multisweeper"
+      },
+      "messages": [
+        {
+          "$ref": "#/channels/multisweeper/messages/ConnectionReady"
+        },
+        {
+          "$ref": "#/channels/multisweeper/messages/ConnectionPong"
+        },
+        {
+          "$ref": "#/channels/multisweeper/messages/RoomsListed"
+        },
+        {
+          "$ref": "#/channels/multisweeper/messages/RoomState"
+        },
+        {
+          "$ref": "#/channels/multisweeper/messages/RoomRemoved"
+        },
+        {
+          "$ref": "#/channels/multisweeper/messages/CommandRejected"
+        },
+        {
+          "$ref": "#/channels/multisweeper/messages/GameStarted"
+        }
+      ]
+    }
+  },
+  "servers": {
+    "local": {
+      "description": "Local Multisweeper server",
+      "host": "localhost:8080",
+      "protocol": "ws"
     }
   }
 }

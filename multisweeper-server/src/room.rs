@@ -11,7 +11,8 @@ use crate::{
     protocol::{
         room::{PlayerCommand, RoomMessage},
         session::{
-            MatchState as ProtocolMatchState, MatchView, PlayerState, PlayerView, SessionMessage,
+            ClientError, ErrorCode, MatchState as ProtocolMatchState, MatchView, MessageId,
+            PlayerState, PlayerView, SessionMessage,
         },
     },
     session::{PlayerAddr, PlayerId},
@@ -49,6 +50,25 @@ pub enum RoomError {
     Game(#[from] GameError),
 }
 
+impl RoomError {
+    fn client_error(&self) -> ClientError {
+        let code = match self {
+            Self::MailboxDropped | Self::PlayerDropped(_) => ErrorCode::RoomUnavailable,
+            Self::NoPlayerFound(_) => ErrorCode::PlayerNotFound,
+            Self::NotOwner => ErrorCode::NotRoomOwner,
+            Self::GameAlreadyStarted => ErrorCode::GameAlreadyStarted,
+            Self::NoGame => ErrorCode::GameNotStarted,
+            Self::GameEnded => ErrorCode::GameEnded,
+            Self::PlayerIsSpectating(_) => ErrorCode::PlayerIsSpectating,
+            Self::PlayerEliminated(_) => ErrorCode::PlayerEliminated,
+            Self::PlayerNotCurrent(_) => ErrorCode::NotCurrentPlayer,
+            Self::AllPlayersDropped => ErrorCode::NoPlayersRemaining,
+            Self::Game(_) => ErrorCode::GameError,
+        };
+        ClientError::new(code, self.to_string())
+    }
+}
+
 struct PlayerRecord {
     address: PlayerAddr,
     state: PlayerState,
@@ -77,6 +97,7 @@ pub struct Room {
     match_state: RoomMatchState,
 }
 
+#[derive(Clone)]
 pub struct RoomState {
     pub code: RoomCode,
     pub players: Vec<PlayerView>,
@@ -387,12 +408,13 @@ impl Room {
                     Err(_) => continue,
                 };
                 let _ = addr
-                    .send(SessionMessage::Kicked {
+                    .send(SessionMessage::RoomRemoved {
+                        correlation_id: None,
                         reason: "player dropped".to_string(),
                     })
                     .await;
             }
-            let _ = self.broadcast_state().await;
+            let _ = self.broadcast_state(None).await;
             errs = remainder;
         }
         errs
@@ -400,6 +422,7 @@ impl Room {
 
     async fn handle_mailbox(&mut self, msg: RoomMessage) -> Result<(), Vec<RoomError>> {
         let player_id = msg.id.clone();
+        let reply_to = msg.reply_to.clone();
         debug!(
             target: "multisweeper.room.command_received",
             room_code = %self.code,
@@ -407,15 +430,22 @@ impl Room {
             command = player_command_name(&msg.command),
             "room command received"
         );
+        let message_id = msg.message_id.clone();
         let mut errs = Vec::new();
+        let mut correlated_state_for = None;
         match msg.command {
-            PlayerCommand::Join { handle } => {
+            PlayerCommand::Join => {
                 if matches!(self.match_state, RoomMatchState::Waiting) {
-                    self.register_player(player_id, handle.clone());
+                    self.register_player(player_id.clone(), reply_to.clone());
+                    correlated_state_for = Some((player_id.clone(), message_id.clone()));
                 } else {
-                    let _ = handle
-                        .send(SessionMessage::Kicked {
-                            reason: "game has already started".to_string(),
+                    let _ = reply_to
+                        .send(SessionMessage::RoomJoinRejected {
+                            correlation_id: Some(message_id.clone()),
+                            error: ClientError::new(
+                                ErrorCode::GameAlreadyStarted,
+                                "game has already started",
+                            ),
                         })
                         .await;
                 }
@@ -423,10 +453,20 @@ impl Room {
             PlayerCommand::Leave => {
                 let addr = match self.drop_player(&player_id).await {
                     Ok(addr) => addr,
-                    Err(_) => return Ok(()),
+                    Err(error) => {
+                        self.send_player_error(
+                            &player_id,
+                            &reply_to,
+                            error,
+                            Some(message_id.clone()),
+                        )
+                        .await;
+                        return Ok(());
+                    }
                 };
                 let _ = addr
-                    .send(SessionMessage::Kicked {
+                    .send(SessionMessage::RoomRemoved {
+                        correlation_id: Some(message_id.clone()),
                         reason: "player left".to_string(),
                     })
                     .await;
@@ -434,14 +474,22 @@ impl Room {
             PlayerCommand::StartGame { difficulty } => {
                 match self.start_game(player_id.clone(), difficulty) {
                     Ok(_) => {
-                        if let Err(mut send_errors) =
-                            self.broadcast_message(SessionMessage::GameStarted).await
+                        let correlated_message_for = Some((player_id.clone(), message_id.clone()));
+                        if let Err(mut send_errors) = self
+                            .broadcast_message(
+                                SessionMessage::GameStarted {
+                                    correlation_id: None,
+                                },
+                                correlated_message_for.as_ref(),
+                            )
+                            .await
                         {
                             errs.append(&mut send_errors);
                         }
                     }
                     Err(e) => {
-                        self.send_player_error(&player_id, e.to_string()).await;
+                        self.send_player_error(&player_id, &reply_to, e, Some(message_id.clone()))
+                            .await;
                     }
                 };
             }
@@ -505,6 +553,7 @@ impl Room {
                                 }
                             }
                         }
+                        correlated_state_for = Some((player_id.clone(), message_id.clone()));
                         match self.state() {
                             Ok(_) => (),
                             Err(error) => {
@@ -520,21 +569,26 @@ impl Room {
                             error_type = room_error_name(&error),
                             "game action rejected"
                         );
-                        self.send_player_error(&player_id, error.to_string()).await;
+                        self.send_player_error(
+                            &player_id,
+                            &reply_to,
+                            error,
+                            Some(message_id.clone()),
+                        )
+                        .await;
                     }
                 }
             }
-            PlayerCommand::GameQuery => match self.state() {
-                Ok(state) => {
-                    if let Err(error) = self.send_player(&player_id, state.into()).await {
-                        errs.push(error);
-                    }
+            PlayerCommand::GameQuery => {
+                if let Err(error) = self.state() {
+                    errs.push(error);
+                } else {
+                    correlated_state_for = Some((player_id.clone(), message_id.clone()));
                 }
-                Err(error) => errs.push(error),
-            },
+            }
         }
 
-        match self.broadcast_state().await {
+        match self.broadcast_state(correlated_state_for.as_ref()).await {
             Ok(()) => (),
             Err(mut broadcast_errs) => errs.append(&mut broadcast_errs),
         }
@@ -582,7 +636,10 @@ impl Room {
         skip_all,
         fields(room_code = %self.code)
     )]
-    async fn broadcast_state(&mut self) -> Result<(), Vec<RoomError>> {
+    async fn broadcast_state(
+        &mut self,
+        correlated_to: Option<&(PlayerId, MessageId)>,
+    ) -> Result<(), Vec<RoomError>> {
         debug!(
             target: "multisweeper.room.state_broadcast",
             room_code = %self.code,
@@ -594,7 +651,7 @@ impl Room {
             Err(err) => return Err(vec![err]),
         };
 
-        match self.broadcast_message(state.into()).await {
+        match self.broadcast_message(state.into(), correlated_to).await {
             Ok(()) => Ok(()),
             Err(e) => Err(e),
         }
@@ -605,11 +662,21 @@ impl Room {
         skip_all,
         fields(room_code = %self.code)
     )]
-    async fn broadcast_message(&mut self, msg: SessionMessage) -> Result<(), Vec<RoomError>> {
+    async fn broadcast_message(
+        &mut self,
+        msg: SessionMessage,
+        correlated_to: Option<&(PlayerId, MessageId)>,
+    ) -> Result<(), Vec<RoomError>> {
         let ids: Vec<PlayerId> = self.players.keys().map(ToString::to_string).collect();
         let mut errors = Vec::new();
         for id in ids {
-            match self.send_player(&id, msg.clone()).await {
+            let correlation_id = correlated_to
+                .filter(|(target, _)| target == &id)
+                .map(|(_, message_id)| message_id.clone());
+            match self
+                .send_player(&id, msg.clone().with_correlation_id(correlation_id))
+                .await
+            {
                 Ok(()) => continue,
                 Err(e) => {
                     errors.push(e);
@@ -648,14 +715,29 @@ impl Room {
         }
     }
 
-    async fn send_player_error(&mut self, id: &PlayerId, reason: String) {
-        let _ = self.send_player(id, SessionMessage::Error { reason }).await;
+    async fn send_player_error(
+        &mut self,
+        id: &PlayerId,
+        reply_to: &PlayerAddr,
+        error: RoomError,
+        correlation_id: Option<MessageId>,
+    ) {
+        let message = SessionMessage::Error {
+            correlation_id,
+            error: error.client_error(),
+        };
+        if matches!(
+            self.send_player(id, message.clone()).await,
+            Err(RoomError::NoPlayerFound(_))
+        ) {
+            let _ = reply_to.send(message).await;
+        }
     }
 }
 
 fn player_command_name(command: &PlayerCommand) -> &'static str {
     match command {
-        PlayerCommand::Join { .. } => "join",
+        PlayerCommand::Join => "join",
         PlayerCommand::Leave => "leave",
         PlayerCommand::StartGame { .. } => "start_game",
         PlayerCommand::GameAction { .. } => "game_action",

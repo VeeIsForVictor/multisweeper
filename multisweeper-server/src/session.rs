@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use anyhow::Result;
 use futures::{
     SinkExt, StreamExt,
@@ -21,8 +23,8 @@ use crate::{
     protocol::{
         registry::RegistryMessage,
         room::{PlayerCommand, RoomMessage},
-        session::SessionMessage,
-        wire::{ClientRequest, ServerResponse},
+        session::{ClientError, ErrorCode, MessageId, SessionMessage},
+        wire::{ClientRequest, ServerMessage, next_message_id},
     },
     registry::{RegistryAddr, RegistryError},
     room::{RoomAddr, RoomCode},
@@ -48,6 +50,25 @@ pub enum SessionError {
     NoRoomJoined,
 }
 
+impl SessionError {
+    fn client_error(&self) -> ClientError {
+        let code = match self {
+            Self::ConnectionTerminated => ErrorCode::RoomUnavailable,
+            Self::MailboxDropped | Self::RoomDropped => ErrorCode::RoomDropped,
+            Self::RoomAlreadyJoined => ErrorCode::RoomAlreadyJoined,
+            Self::NoRoomJoined => ErrorCode::NoRoomJoined,
+        };
+        ClientError::new(code, self.to_string())
+    }
+}
+
+enum InboundError {
+    ConnectionTerminated,
+    Transport(Error),
+    Malformed(serde_json::Error),
+    UnsupportedFrame,
+}
+
 pub enum SessionEvent {
     Inbound(Option<Result<Message, Error>>),
     Mailbox(Option<SessionMessage>),
@@ -61,6 +82,7 @@ pub struct Session {
     inbound: PlayerInbound,
     registry_addr: RegistryAddr,
     room: Option<RoomAddr>,
+    seen_message_ids: HashSet<MessageId>,
 }
 
 impl Session {
@@ -79,6 +101,7 @@ impl Session {
             inbound: source,
             registry_addr,
             room: None,
+            seen_message_ids: HashSet::new(),
         }
     }
 
@@ -92,6 +115,11 @@ impl Session {
 
     #[tracing::instrument(name = "session.lifecycle", skip_all, fields(player_id = %self.id))]
     pub async fn handle_connections(mut self) -> Result<()> {
+        self.send_outbound(ServerMessage::ConnectionReady {
+            message_id: next_message_id(),
+            player_id: self.id.clone(),
+        })
+        .await?;
         match self.event_loop().await {
             Ok(()) => (),
             Err(e) => {
@@ -123,8 +151,40 @@ impl Session {
 
             match event {
                 SessionEvent::Inbound(client_request) => {
-                    let request = self.receive_inbound(client_request)?;
-                    self.handle_inbound(request).await?;
+                    match self.receive_inbound(client_request) {
+                        Ok(request) => {
+                            let message_id = request.message_id().clone();
+                            if let Err(error) = self.accept_message_id(&message_id) {
+                                self.send_rejection(Some(message_id), error).await?;
+                            } else {
+                                self.handle_inbound(request).await?;
+                            }
+                        }
+                        Err(InboundError::Malformed(error)) => {
+                            self.send_rejection(
+                                None,
+                                ClientError::new(
+                                    ErrorCode::InvalidMessage,
+                                    format!("invalid client message: {error}"),
+                                ),
+                            )
+                            .await?;
+                        }
+                        Err(InboundError::UnsupportedFrame) => {
+                            self.send_rejection(
+                                None,
+                                ClientError::new(
+                                    ErrorCode::InvalidMessage,
+                                    "unsupported WebSocket frame for the application protocol",
+                                ),
+                            )
+                            .await?;
+                        }
+                        Err(InboundError::ConnectionTerminated) => {
+                            return Err(SessionError::ConnectionTerminated.into());
+                        }
+                        Err(InboundError::Transport(error)) => return Err(error.into()),
+                    }
                 }
                 SessionEvent::Mailbox(server_message) => {
                     let message = self.receive_mailbox(server_message)?;
@@ -134,11 +194,34 @@ impl Session {
         }
     }
 
-    fn receive_inbound(&self, req: Option<Result<Message, Error>>) -> Result<ClientRequest> {
+    fn receive_inbound(
+        &self,
+        req: Option<Result<Message, Error>>,
+    ) -> Result<ClientRequest, InboundError> {
         match req {
-            Some(res) => Ok(res?.try_into()?),
-            None => Err(SessionError::ConnectionTerminated.into()),
+            Some(Ok(message @ (Message::Text(_) | Message::Binary(_)))) => {
+                message.try_into().map_err(InboundError::Malformed)
+            }
+            Some(Ok(Message::Close(_))) | None => Err(InboundError::ConnectionTerminated),
+            Some(Ok(_)) => Err(InboundError::UnsupportedFrame),
+            Some(Err(error)) => Err(InboundError::Transport(error)),
         }
+    }
+
+    fn accept_message_id(&mut self, message_id: &MessageId) -> Result<(), ClientError> {
+        if message_id.is_empty() || message_id.len() > 128 {
+            return Err(ClientError::new(
+                ErrorCode::InvalidMessage,
+                "message_id must contain between 1 and 128 bytes",
+            ));
+        }
+        if !self.seen_message_ids.insert(message_id.clone()) {
+            return Err(ClientError::new(
+                ErrorCode::DuplicateMessageId,
+                "message_id was already used on this connection",
+            ));
+        }
+        Ok(())
     }
 
     fn receive_mailbox(&mut self, msg: Option<SessionMessage>) -> Result<SessionMessage> {
@@ -157,127 +240,189 @@ impl Session {
             "client request received"
         );
         match request {
-            ClientRequest::Ping => Ok(self.send_outbound(ServerResponse::Pong).await?),
-            ClientRequest::CreateRoom => {
+            ClientRequest::ConnectionPing { message_id } => Ok(self
+                .send_outbound(ServerMessage::ConnectionPong {
+                    message_id: next_message_id(),
+                    correlation_id: message_id,
+                })
+                .await?),
+            ClientRequest::RoomCreate { message_id } => {
                 if self.room.is_some() {
                     return self
-                        .send_outbound(ServerResponse::ClientError(
-                            SessionError::RoomAlreadyJoined.to_string(),
-                        ))
+                        .send_rejection(
+                            Some(message_id),
+                            SessionError::RoomAlreadyJoined.client_error(),
+                        )
                         .await;
                 }
                 let (reply_sdr, reply_rcr) = oneshot::channel::<RoomAddr>();
-                self.registry_addr
+                if self
+                    .registry_addr
                     .send(RegistryMessage::CreateLobby(reply_sdr))
-                    .await?;
-                let addr = reply_rcr.await?;
+                    .await
+                    .is_err()
+                {
+                    return self
+                        .send_rejection(Some(message_id), SessionError::RoomDropped.client_error())
+                        .await;
+                }
+                let addr = match reply_rcr.await {
+                    Ok(addr) => addr,
+                    Err(_) => {
+                        return self
+                            .send_rejection(
+                                Some(message_id),
+                                SessionError::RoomDropped.client_error(),
+                            )
+                            .await;
+                    }
+                };
                 self.room = Some(addr);
-                Ok(self
-                    .send_room(PlayerCommand::Join {
-                        handle: self.addr.clone(),
-                    })
-                    .await?)
+                self.send_room_or_reject(message_id, PlayerCommand::Join)
+                    .await
             }
-            ClientRequest::JoinRoom { room_code } => {
+            ClientRequest::RoomJoin {
+                message_id,
+                room_code,
+            } => {
                 if self.room.is_some() {
                     return self
-                        .send_outbound(ServerResponse::ClientError(
-                            SessionError::RoomAlreadyJoined.to_string(),
-                        ))
+                        .send_rejection(
+                            Some(message_id),
+                            SessionError::RoomAlreadyJoined.client_error(),
+                        )
                         .await;
                 }
                 let (reply_sdr, reply_rcr) = oneshot::channel::<Result<RoomAddr, RegistryError>>();
-                self.registry_addr
+                if self
+                    .registry_addr
                     .send(RegistryMessage::RequestLobby {
                         code: room_code,
                         reply: reply_sdr,
                     })
-                    .await?;
-                let maybe_lobby_handle = reply_rcr.await?;
+                    .await
+                    .is_err()
+                {
+                    return self
+                        .send_rejection(Some(message_id), SessionError::RoomDropped.client_error())
+                        .await;
+                }
+                let maybe_lobby_handle = match reply_rcr.await {
+                    Ok(result) => result,
+                    Err(_) => {
+                        return self
+                            .send_rejection(
+                                Some(message_id),
+                                SessionError::RoomDropped.client_error(),
+                            )
+                            .await;
+                    }
+                };
                 match maybe_lobby_handle {
                     Ok(addr) => {
                         self.room = Some(addr);
-                        self.send_room(PlayerCommand::Join {
-                            handle: self.addr.clone(),
-                        })
-                        .await?
-                    }
-                    Err(e) => {
-                        self.send_outbound(ServerResponse::ClientError(e.to_string()))
+                        self.send_room_or_reject(message_id, PlayerCommand::Join)
                             .await?
                     }
+                    Err(e) => {
+                        let error = match e {
+                            RegistryError::RoomNotFound(code) => ClientError::new(
+                                ErrorCode::RoomNotFound,
+                                format!("requested room with code {code} not found"),
+                            ),
+                            RegistryError::AddrDropped | RegistryError::ReplyFailed => {
+                                SessionError::RoomDropped.client_error()
+                            }
+                        };
+                        self.send_rejection(Some(message_id), error).await?
+                    }
                 }
                 Ok(())
             }
-            ClientRequest::LeaveRoom => {
+            ClientRequest::RoomLeave { message_id } => {
                 if self.room.is_none() {
                     return self
-                        .send_outbound(ServerResponse::ClientError(
-                            SessionError::NoRoomJoined.to_string(),
-                        ))
+                        .send_rejection(Some(message_id), SessionError::NoRoomJoined.client_error())
                         .await;
                 }
-                self.send_room(PlayerCommand::Leave).await?;
-                Ok(())
+                self.send_room_or_reject(message_id, PlayerCommand::Leave)
+                    .await
             }
-            ClientRequest::QueryRooms => {
+            ClientRequest::RoomsList { message_id } => {
                 let (reply_sdr, reply_rcr) = oneshot::channel::<Vec<RoomCode>>();
-                let _ = self
+                if self
                     .registry_addr
                     .send(RegistryMessage::QueryLobbies(reply_sdr))
-                    .await;
-                let rooms = reply_rcr.await?;
-                Ok(self
-                    .send_outbound(ServerResponse::AdvertiseRooms { rooms })
-                    .await?)
-            }
-            ClientRequest::StartGame { difficulty } => {
-                let response = match &self.room {
-                    None => ServerResponse::ClientError(SessionError::NoRoomJoined.to_string()),
-                    Some(room) => {
-                        match room
-                            .send(RoomMessage {
-                                id: self.id.clone(),
-                                command: PlayerCommand::StartGame {
-                                    difficulty: difficulty.into(),
-                                },
-                            })
-                            .await
-                        {
-                            Ok(_) => return Ok(()),
-                            Err(_) => {
-                                ServerResponse::ClientError(SessionError::RoomDropped.to_string())
-                            }
-                        }
+                    .await
+                    .is_err()
+                {
+                    return self
+                        .send_rejection(Some(message_id), SessionError::RoomDropped.client_error())
+                        .await;
+                }
+                let rooms = match reply_rcr.await {
+                    Ok(rooms) => rooms,
+                    Err(_) => {
+                        return self
+                            .send_rejection(
+                                Some(message_id),
+                                SessionError::RoomDropped.client_error(),
+                            )
+                            .await;
                     }
                 };
-                self.send_outbound(response).await?;
-                Ok(())
+                Ok(self
+                    .send_outbound(ServerMessage::RoomsListed {
+                        message_id: next_message_id(),
+                        correlation_id: message_id,
+                        rooms,
+                    })
+                    .await?)
             }
-            ClientRequest::GameAction { action } => {
+            ClientRequest::GameStart {
+                message_id,
+                difficulty,
+            } => {
                 if self.room.is_none() {
                     return self
-                        .send_outbound(ServerResponse::ClientError(
-                            SessionError::NoRoomJoined.to_string(),
-                        ))
+                        .send_rejection(Some(message_id), SessionError::NoRoomJoined.client_error())
                         .await;
                 }
-                self.send_room(PlayerCommand::GameAction {
-                    action: action.into(),
-                })
-                .await?;
-                Ok(())
+                self.send_room_or_reject(
+                    message_id,
+                    PlayerCommand::StartGame {
+                        difficulty: difficulty.into(),
+                    },
+                )
+                .await
             }
-            ClientRequest::GameQuery => {
+            ClientRequest::GameAction {
+                message_id,
+                action,
+                x,
+                y,
+            } => {
                 if self.room.is_none() {
                     return self
-                        .send_outbound(ServerResponse::ClientError(
-                            SessionError::NoRoomJoined.to_string(),
-                        ))
+                        .send_rejection(Some(message_id), SessionError::NoRoomJoined.client_error())
                         .await;
                 }
-                self.send_room(PlayerCommand::GameQuery).await?;
-                Ok(())
+                self.send_room_or_reject(
+                    message_id,
+                    PlayerCommand::GameAction {
+                        action: action.into_game_action(x, y),
+                    },
+                )
+                .await
+            }
+            ClientRequest::RoomStateGet { message_id } => {
+                if self.room.is_none() {
+                    return self
+                        .send_rejection(Some(message_id), SessionError::NoRoomJoined.client_error())
+                        .await;
+                }
+                self.send_room_or_reject(message_id, PlayerCommand::GameQuery)
+                    .await
             }
         }
     }
@@ -290,38 +435,36 @@ impl Session {
             message = session_message_name(&message),
             "server message received"
         );
-        match message {
-            SessionMessage::RoomState {
-                code: _,
-                owner: _,
-                players: _,
-                game: _,
-            } => {
-                self.send_outbound(ServerResponse::Message(message)).await?;
-            }
-            SessionMessage::Kicked { reason } => {
-                self.room = None;
-                self.send_outbound(ServerResponse::ClientError(reason))
-                    .await?;
-            }
-            SessionMessage::Error { reason } => {
-                self.send_outbound(ServerResponse::ClientError(reason))
-                    .await?;
-            }
-            SessionMessage::GameStarted => {
-                self.send_outbound(ServerResponse::Message(message)).await?;
-            }
+        if matches!(
+            &message,
+            SessionMessage::RoomRemoved { .. } | SessionMessage::RoomJoinRejected { .. }
+        ) {
+            self.room = None;
         }
+        self.send_outbound(message.into()).await?;
 
         Ok(())
     }
 
+    async fn send_rejection(
+        &mut self,
+        correlation_id: Option<MessageId>,
+        error: ClientError,
+    ) -> Result<()> {
+        self.send_outbound(ServerMessage::CommandRejected {
+            message_id: next_message_id(),
+            correlation_id,
+            error,
+        })
+        .await
+    }
+
     #[tracing::instrument(name = "session.send_response", skip_all, fields(player_id = %self.id))]
-    async fn send_outbound(&mut self, response: ServerResponse) -> Result<()> {
+    async fn send_outbound(&mut self, response: ServerMessage) -> Result<()> {
         debug!(
             target: "multisweeper.session.response_sent",
             player_id = %self.id,
-            response = server_response_name(&response),
+            response = server_message_name(&response),
             "server response sent"
         );
         self.outbound.send(response.try_into()?).await?;
@@ -329,7 +472,7 @@ impl Session {
     }
 
     #[tracing::instrument(name = "session.send_room_command", skip_all, fields(player_id = %self.id))]
-    async fn send_room(&mut self, command: PlayerCommand) -> Result<()> {
+    async fn send_room(&mut self, message_id: MessageId, command: PlayerCommand) -> Result<()> {
         debug!(
             target: "multisweeper.session.room_command_sent",
             player_id = %self.id,
@@ -340,6 +483,8 @@ impl Session {
             Some(addr) => Ok(addr
                 .send(RoomMessage {
                     id: self.id.clone(),
+                    message_id,
+                    reply_to: self.addr.clone(),
                     command,
                 })
                 .await?),
@@ -347,9 +492,26 @@ impl Session {
         }
     }
 
+    async fn send_room_or_reject(
+        &mut self,
+        message_id: MessageId,
+        command: PlayerCommand,
+    ) -> Result<()> {
+        match self.send_room(message_id.clone(), command).await {
+            Ok(()) => Ok(()),
+            Err(_) => {
+                self.room = None;
+                self.send_rejection(Some(message_id), SessionError::RoomDropped.client_error())
+                    .await
+            }
+        }
+    }
+
     async fn terminate(mut self) {
         if self.room.is_some() {
-            let _ = self.send_room(PlayerCommand::Leave).await;
+            let _ = self
+                .send_room(next_message_id(), PlayerCommand::Leave)
+                .await;
         }
         let _ = self.outbound.close().await;
     }
@@ -357,20 +519,20 @@ impl Session {
 
 fn client_request_name(request: &ClientRequest) -> &'static str {
     match request {
-        ClientRequest::Ping => "ping",
-        ClientRequest::QueryRooms => "query_rooms",
-        ClientRequest::JoinRoom { .. } => "join_room",
-        ClientRequest::CreateRoom => "create_room",
-        ClientRequest::LeaveRoom => "leave_room",
-        ClientRequest::StartGame { .. } => "start_game",
+        ClientRequest::ConnectionPing { .. } => "connection_ping",
+        ClientRequest::RoomsList { .. } => "rooms_list",
+        ClientRequest::RoomJoin { .. } => "room_join",
+        ClientRequest::RoomCreate { .. } => "room_create",
+        ClientRequest::RoomLeave { .. } => "room_leave",
+        ClientRequest::GameStart { .. } => "game_start",
         ClientRequest::GameAction { .. } => "game_action",
-        ClientRequest::GameQuery => "game_query",
+        ClientRequest::RoomStateGet { .. } => "room_state_get",
     }
 }
 
 fn player_command_name(command: &PlayerCommand) -> &'static str {
     match command {
-        PlayerCommand::Join { .. } => "join",
+        PlayerCommand::Join => "join",
         PlayerCommand::Leave => "leave",
         PlayerCommand::StartGame { .. } => "start_game",
         PlayerCommand::GameAction { .. } => "game_action",
@@ -381,17 +543,21 @@ fn player_command_name(command: &PlayerCommand) -> &'static str {
 fn session_message_name(message: &SessionMessage) -> &'static str {
     match message {
         SessionMessage::RoomState { .. } => "room_state",
-        SessionMessage::Kicked { .. } => "kicked",
+        SessionMessage::RoomRemoved { .. } => "room_removed",
+        SessionMessage::RoomJoinRejected { .. } => "room_join_rejected",
         SessionMessage::Error { .. } => "error",
-        SessionMessage::GameStarted => "game_started",
+        SessionMessage::GameStarted { .. } => "game_started",
     }
 }
 
-fn server_response_name(response: &ServerResponse) -> &'static str {
+fn server_message_name(response: &ServerMessage) -> &'static str {
     match response {
-        ServerResponse::Pong => "pong",
-        ServerResponse::AdvertiseRooms { .. } => "advertise_rooms",
-        ServerResponse::ClientError(_) => "client_error",
-        ServerResponse::Message(_) => "message",
+        ServerMessage::ConnectionReady { .. } => "connection_ready",
+        ServerMessage::ConnectionPong { .. } => "connection_pong",
+        ServerMessage::RoomsListed { .. } => "rooms_listed",
+        ServerMessage::RoomState { .. } => "room_state",
+        ServerMessage::RoomRemoved { .. } => "room_removed",
+        ServerMessage::CommandRejected { .. } => "command_rejected",
+        ServerMessage::GameStarted { .. } => "game_started",
     }
 }

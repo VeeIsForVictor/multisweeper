@@ -51,7 +51,7 @@ impl Registry {
     fn generate_name(&mut self, prefix: &str) -> String {
         let id = self.entity_counter;
         self.entity_counter += 1;
-        return format!("{prefix}{id:0>5}")
+        return format!("{prefix}{id:0>5}");
     }
 
     fn register_player(&mut self) -> String {

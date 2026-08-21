@@ -1,6 +1,6 @@
 use asyncapi_rust::AsyncApi;
 
-use super::wire::{ClientRequest, ServerResponse};
+use super::wire::{ClientRequest, ServerMessage};
 
 #[derive(AsyncApi)]
 #[asyncapi(
@@ -17,6 +17,6 @@ use super::wire::{ClientRequest, ServerResponse};
 #[asyncapi_channel(name = "multisweeper", address = "/")]
 #[asyncapi_operation(name = "clientMessages", action = "receive", channel = "multisweeper")]
 #[asyncapi_operation(name = "serverMessages", action = "send", channel = "multisweeper")]
-#[asyncapi_messages(ClientRequest, ServerResponse)]
+#[asyncapi_messages(ClientRequest, ServerMessage)]
 #[allow(clippy::duplicated_attributes)]
 pub struct MultisweeperApi;

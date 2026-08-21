@@ -3,7 +3,7 @@ use std::{fs, path::PathBuf};
 use asyncapi_rust::MessageRef;
 use multisweeper_server::protocol::{
     docs::MultisweeperApi,
-    wire::{ClientRequest, ServerResponse},
+    wire::{ClientRequest, ServerMessage},
 };
 
 fn main() {
@@ -17,7 +17,7 @@ fn main() {
     let mut spec = MultisweeperApi::asyncapi_spec();
 
     let client_message_names = ClientRequest::asyncapi_message_names();
-    let server_message_names = ServerResponse::asyncapi_message_names();
+    let server_message_names = ServerMessage::asyncapi_message_names();
 
     let channel_messages = client_message_names
         .iter()
@@ -58,8 +58,24 @@ fn main() {
         .expect("server message operation")
         .messages = Some(references(&server_message_names));
 
-    let spec =
-        serde_json::to_string_pretty(&spec).expect("failed to serialize AsyncAPI specification");
+    let mut document =
+        serde_json::to_value(&spec).expect("failed to serialize AsyncAPI specification");
+    let correlation_id = serde_json::json!({
+        "description": "The message_id of the client command that caused this server message, when applicable.",
+        "location": "$message.payload#/correlation_id"
+    });
+    for message_name in [
+        "ConnectionPong",
+        "RoomsListed",
+        "RoomState",
+        "RoomRemoved",
+        "CommandRejected",
+        "GameStarted",
+    ] {
+        document["components"]["messages"][message_name]["correlationId"] = correlation_id.clone();
+    }
+    let spec = serde_json::to_string_pretty(&document)
+        .expect("failed to serialize AsyncAPI specification");
 
     fs::write(&output_path, format!("{spec}\n")).expect("failed to write AsyncAPI specification");
 
