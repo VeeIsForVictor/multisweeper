@@ -78,61 +78,36 @@ impl ClientError {
 
 #[derive(Debug, Clone)]
 pub enum SessionMessage {
+    Reply {
+        request_id: MessageId,
+        message: SessionEvent,
+    },
+    Broadcast(SessionEvent),
+}
+
+#[derive(Debug, Clone)]
+pub enum SessionEvent {
     RoomState {
-        correlation_id: Option<MessageId>,
         code: RoomCode,
         owner: Option<PlayerId>,
         players: Vec<PlayerView>,
         game: MatchView,
     },
     RoomRemoved {
-        correlation_id: Option<MessageId>,
         reason: String,
     },
     RoomJoinRejected {
-        correlation_id: Option<MessageId>,
         error: ClientError,
     },
     Error {
-        correlation_id: Option<MessageId>,
         error: ClientError,
     },
-    GameStarted {
-        correlation_id: Option<MessageId>,
-    },
+    GameStarted,
 }
 
-impl SessionMessage {
-    pub fn with_correlation_id(mut self, correlation_id: Option<MessageId>) -> Self {
-        match &mut self {
-            Self::RoomState {
-                correlation_id: current,
-                ..
-            }
-            | Self::RoomRemoved {
-                correlation_id: current,
-                ..
-            }
-            | Self::RoomJoinRejected {
-                correlation_id: current,
-                ..
-            }
-            | Self::Error {
-                correlation_id: current,
-                ..
-            }
-            | Self::GameStarted {
-                correlation_id: current,
-            } => *current = correlation_id,
-        }
-        self
-    }
-}
-
-impl From<RoomState> for SessionMessage {
+impl From<RoomState> for SessionEvent {
     fn from(value: RoomState) -> Self {
-        SessionMessage::RoomState {
-            correlation_id: None,
+        SessionEvent::RoomState {
             code: value.code,
             owner: value.owner,
             players: value.players,

@@ -22,7 +22,7 @@ use tracing::{debug, error, info};
 use crate::{
     protocol::{
         registry::RegistryMessage,
-        room::{PlayerCommand, RoomMessage},
+        room::{PlayerCommand, RequestContext, RoomMessage},
         session::{ClientError, ErrorCode, MessageId, SessionMessage},
         wire::{ClientRequest, ServerMessage, next_message_id},
     },
@@ -437,7 +437,13 @@ impl Session {
         );
         if matches!(
             &message,
-            SessionMessage::RoomRemoved { .. } | SessionMessage::RoomJoinRejected { .. }
+            SessionMessage::Reply {
+                message: crate::protocol::session::SessionEvent::RoomRemoved { .. }
+                    | crate::protocol::session::SessionEvent::RoomJoinRejected { .. },
+                ..
+            } | SessionMessage::Broadcast(
+                crate::protocol::session::SessionEvent::RoomRemoved { .. },
+            )
         ) {
             self.room = None;
         }
@@ -483,8 +489,10 @@ impl Session {
             Some(addr) => Ok(addr
                 .send(RoomMessage {
                     id: self.id.clone(),
-                    message_id,
-                    reply_to: self.addr.clone(),
+                    request: RequestContext {
+                        message_id,
+                        reply_to: self.addr.clone(),
+                    },
                     command,
                 })
                 .await?),
@@ -542,11 +550,14 @@ fn player_command_name(command: &PlayerCommand) -> &'static str {
 
 fn session_message_name(message: &SessionMessage) -> &'static str {
     match message {
-        SessionMessage::RoomState { .. } => "room_state",
-        SessionMessage::RoomRemoved { .. } => "room_removed",
-        SessionMessage::RoomJoinRejected { .. } => "room_join_rejected",
-        SessionMessage::Error { .. } => "error",
-        SessionMessage::GameStarted { .. } => "game_started",
+        SessionMessage::Reply { message, .. } | SessionMessage::Broadcast(message) => match message
+        {
+            crate::protocol::session::SessionEvent::RoomState { .. } => "room_state",
+            crate::protocol::session::SessionEvent::RoomRemoved { .. } => "room_removed",
+            crate::protocol::session::SessionEvent::RoomJoinRejected { .. } => "room_join_rejected",
+            crate::protocol::session::SessionEvent::Error { .. } => "error",
+            crate::protocol::session::SessionEvent::GameStarted => "game_started",
+        },
     }
 }
 

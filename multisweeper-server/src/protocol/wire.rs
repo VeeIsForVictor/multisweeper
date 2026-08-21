@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::{
-    protocol::session::{ClientError, MessageId, SessionMessage},
+    protocol::session::{ClientError, MessageId, SessionEvent, SessionMessage},
     room::RoomCode,
     session::PlayerId,
 };
@@ -146,9 +146,15 @@ pub enum ServerMessage {
 impl From<SessionMessage> for ServerMessage {
     fn from(value: SessionMessage) -> Self {
         let message_id = next_message_id();
+        let (correlation_id, value) = match value {
+            SessionMessage::Reply {
+                request_id,
+                message,
+            } => (Some(request_id), message),
+            SessionMessage::Broadcast(message) => (None, message),
+        };
         match value {
-            SessionMessage::RoomState {
-                correlation_id,
+            SessionEvent::RoomState {
                 code,
                 owner,
                 players,
@@ -161,27 +167,19 @@ impl From<SessionMessage> for ServerMessage {
                 players,
                 game,
             },
-            SessionMessage::RoomRemoved {
-                correlation_id,
-                reason,
-            } => Self::RoomRemoved {
+            SessionEvent::RoomRemoved { reason } => Self::RoomRemoved {
                 message_id,
                 correlation_id,
                 reason,
             },
-            SessionMessage::RoomJoinRejected {
-                correlation_id,
-                error,
+            SessionEvent::RoomJoinRejected { error } | SessionEvent::Error { error } => {
+                Self::CommandRejected {
+                    message_id,
+                    correlation_id,
+                    error,
+                }
             }
-            | SessionMessage::Error {
-                correlation_id,
-                error,
-            } => Self::CommandRejected {
-                message_id,
-                correlation_id,
-                error,
-            },
-            SessionMessage::GameStarted { correlation_id } => Self::GameStarted {
+            SessionEvent::GameStarted => Self::GameStarted {
                 message_id,
                 correlation_id,
             },
@@ -215,6 +213,8 @@ impl ClientRequest {
 
 #[cfg(test)]
 mod tests {
+    use crate::protocol::session::{SessionEvent, SessionMessage};
+
     use super::{ClientGameAction, ClientRequest, ServerMessage};
 
     #[test]
@@ -260,5 +260,20 @@ mod tests {
         assert_eq!(json["x"], 2);
         assert_eq!(json["y"], 3);
         assert!(json.get("payload").is_none());
+    }
+
+    #[test]
+    fn replies_preserve_request_ids_but_broadcasts_are_uncorrelated() {
+        let reply = ServerMessage::from(SessionMessage::Reply {
+            request_id: "req-1".to_string(),
+            message: SessionEvent::GameStarted,
+        });
+        let broadcast = ServerMessage::from(SessionMessage::Broadcast(SessionEvent::GameStarted));
+
+        let reply_json = serde_json::to_value(reply).expect("reply should serialize");
+        let broadcast_json = serde_json::to_value(broadcast).expect("broadcast should serialize");
+
+        assert_eq!(reply_json["correlation_id"], "req-1");
+        assert!(broadcast_json.get("correlation_id").is_none());
     }
 }

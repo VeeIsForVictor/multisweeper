@@ -11,9 +11,14 @@ pub enum PlayerCommand {
     GameQuery,
 }
 
-pub struct RoomMessage {
-    pub id: PlayerId,
+#[derive(Clone)]
+pub struct RequestContext {
     pub message_id: MessageId,
     pub reply_to: PlayerAddr,
+}
+
+pub struct RoomMessage {
+    pub id: PlayerId,
+    pub request: RequestContext,
     pub command: PlayerCommand,
 }
