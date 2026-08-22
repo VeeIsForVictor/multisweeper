@@ -1,3 +1,3 @@
-import { MULTISWEEPER_SERVER } from "./env";
+import { SERVER_URL } from "./env";
 
-const socket = new WebSocket(MULTISWEEPER_SERVER);
+const socket = new WebSocket(SERVER_URL);
