@@ -1,7 +1,6 @@
 import * as v from 'valibot';
 import { ClientMessage, ServerMessage } from './protocol';
 import { type Logger } from 'pino';
-import { strict } from 'assert';
 
 export interface StateView {
     playerId: string,
@@ -23,6 +22,7 @@ export class State {
             (event) => {
                 const message = this.receiveGameMessage(event.data);
                 this.handleGameMessage(message);
+                return true;
             }
         )
 
@@ -35,8 +35,8 @@ export class State {
         this.#ws.send(JSON.stringify(parsedMessage));
     }
 
-    receiveGameMessage = (message: unknown) => {
-        return v.parse(ServerMessage, message);
+    receiveGameMessage = (message: string) => {
+        return v.parse(ServerMessage, JSON.parse(message));
     }
 
     handleGameMessage = (message: ServerMessage) => {
@@ -47,7 +47,7 @@ export class State {
         messageLogger.info('handling message')
         switch (message.type) {
             case 'connection.ready':
-                strict(this.status === 'connecting');
+                console.assert(this.status === 'connecting');
                 this.view = {
                     playerId: message.player_id,
                     roomCode: null

@@ -11,11 +11,6 @@ const logger = pino({
     }
 });
 
-process.on(
-    'beforeExit',
-    () => server.close()
-);
-
 const state = new State(server, logger.child({
     'target': 'game-state'
 }));
@@ -25,5 +20,6 @@ export const handle: Handle = async ({ event, resolve }) => {
         'target': 'request'
     })
     event.locals = { state, logger: requestLogger };
+    requestLogger.info('handling request');
     return await resolve(event);
 };
