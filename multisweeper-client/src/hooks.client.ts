@@ -16,7 +16,7 @@ process.on(
     () => server.close()
 );
 
-const state = new State(server);
+const state = new State(server, logger);
 
 export const handle: Handle = async ({ event, resolve }) => {
     event.locals = { state, logger };
