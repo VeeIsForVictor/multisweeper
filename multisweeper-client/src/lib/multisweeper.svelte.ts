@@ -1,12 +1,21 @@
 import * as v from 'valibot';
 import { ClientMessage, ServerMessage } from './protocol';
 import { type Logger } from 'pino';
+import { strict } from 'assert';
+
+export interface StateView {
+    playerId: string,
+    roomCode: string | null
+}
 
 export class State {
     #ws: WebSocket
     #logger: Logger
 
-    public constructor(ws: WebSocket) {
+    status = $state< 'connecting' | 'ready' >('connecting');
+    view = $state.raw< StateView | null >(null)
+
+    public constructor(ws: WebSocket, logger: Logger) {
         this.#ws = ws;
 
         this.#ws.addEventListener(
@@ -16,6 +25,8 @@ export class State {
                 this.handleGameMessage(message);
             }
         )
+
+        this.#logger = logger;
     }
 
     sendGameMessage = (message: ClientMessage) => {
@@ -29,6 +40,17 @@ export class State {
     }
 
     handleGameMessage = (message: ServerMessage) => {
-
+        switch (message.type) {
+            case 'connection.ready':
+                strict(this.status === 'connecting');
+                this.view = {
+                    playerId: message.player_id,
+                    roomCode: null
+                }
+                this.status = 'ready';
+                this.#logger = this.#logger.child({
+                    'player.id': message.player_id
+                })
+        }
     }
 }

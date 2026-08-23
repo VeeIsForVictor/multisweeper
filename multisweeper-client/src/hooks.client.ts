@@ -14,7 +14,7 @@ const logger = pino({
 process.on(
     'beforeExit',
     () => server.close()
-)
+);
 
 const state = new State(server);
 
