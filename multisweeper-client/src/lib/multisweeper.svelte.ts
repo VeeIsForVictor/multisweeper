@@ -1,8 +1,10 @@
 import * as v from 'valibot';
 import { ClientMessage, ServerMessage } from './protocol';
+import { type Logger } from 'pino';
 
 export class State {
     #ws: WebSocket
+    #logger: Logger
 
     public constructor(ws: WebSocket) {
         this.#ws = ws;
