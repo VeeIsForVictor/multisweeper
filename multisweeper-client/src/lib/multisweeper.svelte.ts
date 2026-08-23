@@ -40,6 +40,11 @@ export class State {
     }
 
     handleGameMessage = (message: ServerMessage) => {
+        const messageLogger = this.#logger.child({
+            'message.id': message.message_id,
+            'message.type': message.type
+        })
+        messageLogger.info('handling message')
         switch (message.type) {
             case 'connection.ready':
                 strict(this.status === 'connecting');
