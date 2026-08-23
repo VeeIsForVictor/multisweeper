@@ -16,9 +16,14 @@ process.on(
     () => server.close()
 );
 
-const state = new State(server, logger);
+const state = new State(server, logger.child({
+    'target': 'game-state'
+}));
 
 export const handle: Handle = async ({ event, resolve }) => {
-    event.locals = { state, logger };
+    const requestLogger = logger.child({
+        'target': 'request'
+    })
+    event.locals = { state, logger: requestLogger };
     return await resolve(event);
 };
