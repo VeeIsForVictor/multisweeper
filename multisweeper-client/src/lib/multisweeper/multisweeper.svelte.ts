@@ -1,18 +1,13 @@
 import * as v from 'valibot';
-import { ClientMessage, ServerMessage } from './protocol';
+import { ClientCommand, ClientMessage, ServerMessage } from '../protocol';
 import { type Logger } from 'pino';
+import type { State } from './state';
 
-export interface StateView {
-    playerId: string,
-    roomCode: string | null
-}
-
-export class State {
+export class Multisweeper {
     #ws: WebSocket
     #logger: Logger
 
-    status = $state< 'connecting' | 'ready' >('connecting');
-    view = $state.raw< StateView | null >(null)
+    state = $state<State>({ type: "connecting" });
 
     public constructor(ws: WebSocket, logger: Logger) {
         this.#ws = ws;
@@ -29,8 +24,18 @@ export class State {
         this.#logger = logger;
     }
 
-    sendGameMessage = (message: ClientMessage) => {
-        const parsedMessage = v.parse(ClientMessage, message);
+    sendGameMessage = (message: ClientCommand) => {
+        const transportMessage = {
+            ...message,
+            message_id: crypto.randomUUID()
+        }
+
+        const parsedMessage = v.parse(ClientMessage, transportMessage);
+        this.#logger.info({
+            'message.id': parsedMessage.message_id,
+            'message.type': parsedMessage.type
+        }, 'sending message'
+        )
 
         this.#ws.send(JSON.stringify(parsedMessage));
     }
@@ -47,15 +52,26 @@ export class State {
         messageLogger.info('handling message')
         switch (message.type) {
             case 'connection.ready':
-                console.assert(this.status === 'connecting');
-                this.view = {
+                console.assert(this.state.type === 'connecting');
+                this.state = {
+                    type: "no-lobby",
                     playerId: message.player_id,
-                    roomCode: null
+                    lobbies: []
                 }
-                this.status = 'ready';
+                this.sendGameMessage({
+                    type: "rooms.list"
+                })
                 this.#logger = this.#logger.child({
                     'player.id': message.player_id
                 })
+                break;
+            case 'rooms.listed':
+                console.assert(this.state.type === 'no-lobby');
+                this.state = {
+                    type: "no-lobby",
+                    playerId: this.state.playerId,
+                    lobbies: message.rooms
+                }
         }
     }
 }

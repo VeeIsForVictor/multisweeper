@@ -1,5 +1,5 @@
 import { SERVER_URL } from "$lib/env";
-import { State } from "$lib/multisweeper.svelte";
+import { Multisweeper } from "$lib/multisweeper/multisweeper.svelte";
 import { type LayoutLoad } from './$types'
 import { pino } from 'pino';
 
@@ -11,7 +11,7 @@ const logger = pino({
     }
 });
 
-const state = new State(server, logger.child({
+const state = new Multisweeper(server, logger.child({
     'target': 'game-state'
 }));
 
