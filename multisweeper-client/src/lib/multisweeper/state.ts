@@ -1,8 +1,10 @@
 export type State = 
     ConnectingState 
-    | NoLobbyState 
+    | ReadyState
+    | LandingState 
     | FatalState;
 
 type ConnectingState = { type: 'connecting' };
-type NoLobbyState = { type: 'no-lobby', playerId: string, lobbies: string[] }
+type ReadyState = { type: 'ready', playerId: string };
+type LandingState = { type: 'landed', playerId: string, lobbies: string[] }
 type FatalState = { type: 'fatal', message: string }

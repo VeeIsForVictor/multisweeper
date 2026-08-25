@@ -73,21 +73,17 @@ export class Multisweeper {
             case 'connection.ready':
                 console.assert(this.state.type === 'connecting');
                 this.state = {
-                    type: "no-lobby",
+                    type: "ready",
                     playerId: message.player_id,
-                    lobbies: []
                 }
-                this.#sendGameMessage({
-                    type: "rooms.list"
-                })
                 this.#logger = this.#logger.child({
                     'player.id': message.player_id
                 })
                 break;
             case 'rooms.listed':
-                this.#assert(this.state.type === 'no-lobby');
+                this.#assert(this.state.type === 'ready');
                 this.state = {
-                    type: "no-lobby",
+                    type: "landed",
                     playerId: this.state.playerId,
                     lobbies: message.rooms
                 }
@@ -107,5 +103,14 @@ export class Multisweeper {
             }
             throw Error(errorMessage);
         }    
+    }
+
+    queryRooms = async () => {
+        const response = await this.#sendGameMessage({
+            type: "rooms.list"
+        })
+
+        this.#assert(response.type === 'rooms.listed');
+        return response.rooms;
     }
 }
