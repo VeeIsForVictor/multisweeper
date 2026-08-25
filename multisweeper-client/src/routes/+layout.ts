@@ -1,6 +1,6 @@
 import { SERVER_URL } from "$lib/env";
 import { State } from "$lib/multisweeper.svelte";
-import { type Handle } from "@sveltejs/kit";
+import { type LayoutLoad } from './$types'
 import { pino } from 'pino';
 
 const server = new WebSocket(SERVER_URL);
@@ -15,11 +15,6 @@ const state = new State(server, logger.child({
     'target': 'game-state'
 }));
 
-export const handle: Handle = async ({ event, resolve }) => {
-    const requestLogger = logger.child({
-        'target': 'request'
-    })
-    event.locals = { state, logger: requestLogger };
-    requestLogger.info('handling request');
-    return await resolve(event);
+export const load: LayoutLoad = async () => {
+    return { state, logger };    
 };
