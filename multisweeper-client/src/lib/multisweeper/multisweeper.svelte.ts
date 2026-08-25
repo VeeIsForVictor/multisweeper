@@ -45,6 +45,7 @@ export class Multisweeper {
     }
 
     handleGameMessage = (message: ServerMessage) => {
+        this.#assert(this.state.type !== 'fatal')
         const messageLogger = this.#logger.child({
             'message.id': message.message_id,
             'message.type': message.type
@@ -66,12 +67,27 @@ export class Multisweeper {
                 })
                 break;
             case 'rooms.listed':
-                console.assert(this.state.type === 'no-lobby');
+                this.#assert(this.state.type === 'no-lobby');
                 this.state = {
                     type: "no-lobby",
                     playerId: this.state.playerId,
                     lobbies: message.rooms
                 }
         }
+    }
+
+    #assert(condition: boolean, errorMessage: string = 'unexpected error'): asserts condition {
+        if (condition) return;
+        else{ 
+            this.#logger.error({
+                message: errorMessage
+            }, 'game invariant violated');
+            this.#ws.close();
+            this.state = {
+                type: 'fatal',
+                message: errorMessage
+            }
+            throw Error(errorMessage);
+        }    
     }
 }
