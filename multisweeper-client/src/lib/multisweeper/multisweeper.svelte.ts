@@ -110,7 +110,23 @@ export class Multisweeper {
             type: "rooms.list"
         })
 
-        this.#assert(response.type === 'rooms.listed');
+        this.#assert(response.type === 'rooms.listed', 'unexpected response to room query');
         return response.rooms;
+    }
+
+    joinRoom = async (roomId: string) => {
+        const response = await this.#sendGameMessage({
+            type: 'room.join',
+            room_code: roomId
+        });
+
+        this.#assert(response.type === 'room.state' || response.type === 'command.rejected');
+
+        return new Promise<void>((resolve, reject) => {
+            if (response.type === 'room.state')
+                return resolve();
+            else 
+                return reject(response.message_id);
+        })
     }
 }
