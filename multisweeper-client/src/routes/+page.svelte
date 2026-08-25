@@ -5,7 +5,11 @@
     const { ms } = $derived(data);
     const state = $derived(ms.state);
 
-    ms.queryRooms()
+    $effect(() => {
+        if (state.type === 'ready') {
+            ms.queryRooms();
+        }
+    })
 </script>
 
 <h1>Welcome to Multisweeper!</h1>

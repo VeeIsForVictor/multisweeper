@@ -29,6 +29,8 @@ export class Multisweeper {
     }
 
     #sendGameMessage: (message: ClientCommand) => Promise<ServerMessage> = async (message: ClientCommand) => {
+        this.#assert(this.state.type === 'ready', "client is not ready to send messages")
+
         const messageId = crypto.randomUUID();
         const transportMessage = {
             ...message,
