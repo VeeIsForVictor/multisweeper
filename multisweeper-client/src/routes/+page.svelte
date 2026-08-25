@@ -8,6 +8,8 @@
     $effect(() => {
         if (state.type === 'ready') {
             ms.queryRooms();
+
+            setInterval(ms.queryRooms, 1000);
         }
     })
 </script>
