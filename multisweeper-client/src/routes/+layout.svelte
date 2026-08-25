@@ -1,8 +1,13 @@
 <script lang="ts">
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
+	import type { LayoutProps } from './$types';
+	import { onDestroy } from 'svelte';
 
-	let { children } = $props();
+	let { children, data }: LayoutProps = $props();
+	const { ms } = $derived(data);
+
+	onDestroy(() => ms.quit());
 </script>
 
 <svelte:head><link rel="icon" href={favicon} /></svelte:head>
