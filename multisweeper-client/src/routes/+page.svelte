@@ -1,17 +1,18 @@
 <script lang="ts">
+	import { resolve } from "$app/paths";
+	import { onDestroy } from "svelte";
     import { type PageProps } from "./$types";
     export const { data }: PageProps = $props();
     
     const { ms } = $derived(data);
     const state = $derived(ms.state);
 
-    $effect(() => {
-        if (state.type === 'ready') {
-            ms.queryRooms();
-
-            setInterval(ms.queryRooms, 1000);
-        }
-    })
+    const querySchedule = setInterval(() => {
+        if (ms.state.type === 'ready') ms.queryRooms();
+    }, 1000);
+    
+    onDestroy(() => clearInterval(querySchedule));
+    
 </script>
 
 <h1>Welcome to Multisweeper!</h1>
@@ -28,7 +29,12 @@
             <div class="grid grid-rows-3">
                 {#each state.lobbies as lobby (lobby)}
                     <div class="flex flex-col">
-                        {lobby}
+                        <a 
+                            href={resolve("/lobby/[roomId]", { roomId: lobby })} 
+                            title="join room {lobby}"
+                        >
+                            {lobby}
+                        </a>
                     </div>
                 {:else}
                     <h4>No lobbies available. Why not make your own?</h4>
