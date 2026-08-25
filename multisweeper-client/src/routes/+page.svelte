@@ -11,7 +11,7 @@
 <div class="flex flex-col m-8 items-center gap-2">
     {#if state.type === 'connecting'}
         <h1>Connecting to Multisweeper Server</h1>
-    {:else if state.type === 'no-lobby'}
+    {:else if state.type === 'landed'}
             <button>Host Game</button>
             or
             <h3>Join an Existing Room</h3>
