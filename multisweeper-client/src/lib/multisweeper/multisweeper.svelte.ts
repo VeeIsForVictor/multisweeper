@@ -129,4 +129,11 @@ export class Multisweeper {
                 return reject(response.message_id);
         })
     }
+
+    quit = () => {
+        this.#sendGameMessage({
+            type: "room.leave"
+        });
+        this.#ws.close();
+    }
 }
