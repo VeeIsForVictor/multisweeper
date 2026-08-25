@@ -1,8 +1,28 @@
+<script lang="ts">
+    import { type PageProps } from "./$types";
+    export const { data }: PageProps = $props();
+    
+    const { ms } = $derived(data);
+    const state = $derived(ms.state);
+</script>
+
 <h1>Welcome to Multisweeper!</h1>
+
 <div class="flex flex-col m-8 items-center gap-2">
-    <button>Host Game</button>
-    or
-    <div>
-        <h3>Join an Existing Room</h3>
-    </div>
+    {#if state.type === 'connecting'}
+        <h1>Connecting to Multisweeper Server</h1>
+    {:else if state.type === 'no-lobby'}
+            <button>Host Game</button>
+            or
+            <h3>Join an Existing Room</h3>
+            <div class="grid grid-rows-3">
+                {#each state.lobbies as lobby (lobby)}
+                    <div class="flex flex-col">
+                        {lobby}
+                    </div>
+                {:else}
+                    <h4>No lobbies available. Why not make your own?</h4>
+                {/each}
+            </div>
+    {/if}
 </div>

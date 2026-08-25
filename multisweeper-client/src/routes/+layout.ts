@@ -11,10 +11,10 @@ const logger = pino({
     }
 });
 
-const state = new Multisweeper(server, logger.child({
+const ms = new Multisweeper(server, logger.child({
     'target': 'game-state'
 }));
 
 export const load: LayoutLoad = async () => {
-    return { state, logger };    
+    return { ms, logger };    
 };
