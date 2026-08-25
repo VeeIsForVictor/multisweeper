@@ -79,7 +79,7 @@ export class Multisweeper {
         messageLogger.info('handling message')
         switch (message.type) {
             case 'connection.ready':
-                console.assert(this.state.type === 'connecting');
+                this.#assert(this.state.type === 'connecting', 'received connection.ready after successful connection');
                 this.state = {
                     type: "ready",
                     playerId: message.player_id,
@@ -89,7 +89,7 @@ export class Multisweeper {
                 })
                 break;
             case 'rooms.listed':
-                this.#assert(this.state.type === 'ready');
+                this.#assert(this.state.type !== 'connecting', 'received room listing while connecting');
                 this.state = {
                     type: "landed",
                     playerId: this.state.playerId,
