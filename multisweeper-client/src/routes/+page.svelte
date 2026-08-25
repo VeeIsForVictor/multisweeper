@@ -1,17 +1,19 @@
 <script lang="ts">
 	import { resolve } from "$app/paths";
-	import { onDestroy } from "svelte";
+	import { onMount } from "svelte";
     import { type PageProps } from "./$types";
     export const { data }: PageProps = $props();
     
     const { ms } = $derived(data);
     const state = $derived(ms.state);
 
-    const querySchedule = setInterval(() => {
-        if (ms.state.type === 'ready') ms.queryRooms();
-    }, 1000);
-    
-    onDestroy(() => clearInterval(querySchedule));
+    onMount(() => {
+        const querySchedule = setInterval(() => {
+            if (ms.state.type !== 'connecting') ms.queryRooms();
+        }, 1000);
+
+        return () => clearInterval(querySchedule);
+    });
     
 </script>
 
