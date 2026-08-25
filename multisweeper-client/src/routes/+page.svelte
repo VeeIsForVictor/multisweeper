@@ -4,6 +4,8 @@
     
     const { ms } = $derived(data);
     const state = $derived(ms.state);
+
+    
 </script>
 
 <h1>Welcome to Multisweeper!</h1>
@@ -24,5 +26,7 @@
                     <h4>No lobbies available. Why not make your own?</h4>
                 {/each}
             </div>
+    {:else}
+        <h1 class="text-red-500">This shouldn't be appearing, oops!</h1>
     {/if}
 </div>
