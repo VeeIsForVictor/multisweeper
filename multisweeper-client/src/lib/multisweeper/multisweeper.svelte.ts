@@ -135,5 +135,6 @@ export class Multisweeper {
             type: "room.leave"
         });
         this.#ws.close();
+        this.#logger.warn("terminating player instance")
     }
 }
