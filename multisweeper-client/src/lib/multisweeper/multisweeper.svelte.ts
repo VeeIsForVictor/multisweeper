@@ -42,11 +42,17 @@ export class Multisweeper {
         }, 'sending message'
         )
 
-        this.#ws.send(JSON.stringify(parsedMessage));
-
-        return new Promise((resolve) => {
+        const promise = new Promise<ServerMessage>((resolve) => {
             this.#promiseTable.set(messageId, resolve)
         });
+        try {
+            this.#ws.send(JSON.stringify(parsedMessage));
+        } catch (e) {
+            this.#promiseTable.delete(messageId);
+            throw e;
+        }
+
+        return promise;
     }
 
     #receiveGameMessage = (message: string) => {
@@ -130,8 +136,8 @@ export class Multisweeper {
         })
     }
 
-    quit = () => {
-        this.#sendGameMessage({
+    quit = async () => {
+        await this.#sendGameMessage({
             type: "room.leave"
         });
         this.#ws.close();
