@@ -5,7 +5,6 @@
     const { ms } = $derived(data);
     const state = $derived(ms.state);
 
-    
 </script>
 
 <h1>Welcome to Multisweeper!</h1>
@@ -13,6 +12,8 @@
 <div class="flex flex-col m-8 items-center gap-2">
     {#if state.type === 'connecting'}
         <h1>Connecting to Multisweeper Server</h1>
+    {:else if state.type === 'ready'}
+        <h1>Querying server for lobbies...</h1>
     {:else if state.type === 'landed'}
             <button>Host Game</button>
             or
