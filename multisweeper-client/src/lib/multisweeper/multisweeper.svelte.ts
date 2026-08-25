@@ -2,10 +2,14 @@ import * as v from 'valibot';
 import { ClientCommand, ClientMessage, ServerMessage } from '../protocol';
 import { type Logger } from 'pino';
 import type { State } from './state';
+import { SvelteMap } from 'svelte/reactivity';
+
+type MessageResolve = (value: ServerMessage | PromiseLike<ServerMessage>) => void;
 
 export class Multisweeper {
     #ws: WebSocket
     #logger: Logger
+    #promiseTable: Map<string, MessageResolve> = new SvelteMap<string, MessageResolve>();
 
     state = $state<State>({ type: "connecting" });
 
@@ -15,8 +19,8 @@ export class Multisweeper {
         this.#ws.addEventListener(
             'message',
             (event) => {
-                const message = this.receiveGameMessage(event.data);
-                this.handleGameMessage(message);
+                const message = this.#receiveGameMessage(event.data);
+                this.#handleGameMessage(message);
                 return true;
             }
         )
@@ -24,10 +28,11 @@ export class Multisweeper {
         this.#logger = logger;
     }
 
-    sendGameMessage = (message: ClientCommand) => {
+    #sendGameMessage: (message: ClientCommand) => Promise<ServerMessage> = async (message: ClientCommand) => {
+        const messageId = crypto.randomUUID();
         const transportMessage = {
             ...message,
-            message_id: crypto.randomUUID()
+            message_id: messageId
         }
 
         const parsedMessage = v.parse(ClientMessage, transportMessage);
@@ -38,14 +43,27 @@ export class Multisweeper {
         )
 
         this.#ws.send(JSON.stringify(parsedMessage));
+
+        return new Promise((resolve) => {
+            this.#promiseTable.set(messageId, resolve)
+        });
     }
 
-    receiveGameMessage = (message: string) => {
+    #receiveGameMessage = (message: string) => {
         return v.parse(ServerMessage, JSON.parse(message));
     }
 
-    handleGameMessage = (message: ServerMessage) => {
-        this.#assert(this.state.type !== 'fatal')
+    #handleGameMessage = (message: ServerMessage) => {
+        this.#assert(this.state.type !== 'fatal');
+
+        if (message.type !== 'connection.ready' && typeof message.correlation_id === 'string') {
+            const correlatedPromise = this.#promiseTable.get(message.correlation_id);
+            if (typeof correlatedPromise !== 'undefined') {
+                correlatedPromise(message);
+                this.#promiseTable.delete(message.correlation_id);
+            }
+        }
+        
         const messageLogger = this.#logger.child({
             'message.id': message.message_id,
             'message.type': message.type
@@ -59,7 +77,7 @@ export class Multisweeper {
                     playerId: message.player_id,
                     lobbies: []
                 }
-                this.sendGameMessage({
+                this.#sendGameMessage({
                     type: "rooms.list"
                 })
                 this.#logger = this.#logger.child({
