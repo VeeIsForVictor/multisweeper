@@ -167,11 +167,21 @@ export class Multisweeper {
     }
 
     createRoom = async () => {
-        this.#assert(this.roomId === null);
+        this.#assert(this.roomId === null && this.playerId !== null);
+        this.state = {
+            type: 'creating',
+            playerId: this.playerId
+        }
+        return this.#sendGameMessage({
+            type: 'room.create'
+        })
     }
 
-    public get isReady() : boolean {
-        return this.state.type === 'connecting';
+    public get playerId() : string | null {
+        this.#assert(this.state.type !== 'fatal');
+        return this.state.type === 'connecting'
+            ? null
+            : this.state.playerId
     }
 
     public get roomId() : string | null {
