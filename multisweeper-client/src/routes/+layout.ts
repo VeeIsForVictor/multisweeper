@@ -3,6 +3,8 @@ import { Multisweeper } from "$lib/multisweeper/multisweeper.svelte";
 import { type LayoutLoad } from './$types'
 import { pino } from 'pino';
 
+export const ssr = false;
+
 const server = new WebSocket(SERVER_URL);
 const logger = pino({
     transport: {

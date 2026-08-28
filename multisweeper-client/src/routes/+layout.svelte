@@ -3,11 +3,14 @@
 	import favicon from '$lib/assets/favicon.svg';
 	import type { LayoutProps } from './$types';
 	import { onDestroy } from 'svelte';
+	import { browser } from '$app/environment';
 
 	let { children, data }: LayoutProps = $props();
 	const { ms } = $derived(data);
 
-	onDestroy(() => ms.quit());
+	onDestroy(() => {
+		if (browser) void ms.quit();
+	});
 </script>
 
 <svelte:head><link rel="icon" href={favicon} /></svelte:head>

@@ -10,16 +10,23 @@
 
     onMount(() => {
         const querySchedule = setInterval(() => {
-            if (ms.state.type !== 'connecting') ms.queryRooms();
+            if (ms.state.type === 'ready' || ms.state.type === 'landed') {
+                void ms.queryRooms().catch((error) => {
+                    console.error('failed to query rooms', error);
+                });
+            }
         }, 1000);
 
         return () => clearInterval(querySchedule);
     });
 
     async function handleCreateRoom() {
-        await ms.createRoom().then(
-            (roomId) => goto(resolve('/lobby/[roomId]', { roomId }))
-        );
+        try {
+            const roomId = await ms.createRoom();
+            await goto(resolve('/lobby/[roomId]', { roomId }));
+        } catch (error) {
+            console.error('failed to create room', error);
+        }
     }
     
 </script>

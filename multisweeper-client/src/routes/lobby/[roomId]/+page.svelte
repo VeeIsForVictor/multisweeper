@@ -8,21 +8,19 @@
     const { ms } = $derived(data);
 
     let joinPromise: Promise<State> | null = $state(null);
+    let requestedRoomId: string | null = $state(null);
 
     $effect(() => {
-        if (ms.state.type === 'lobby' && ms.state.roomId === params.roomId) {
-            joinPromise = new Promise((resolve) => resolve(ms.state));
-            return ;
-        }
-        if (ms.state.type !== 'connecting') {
-            joinPromise = ms.joinRoom(params.roomId);
-        }
+        const roomId = params.roomId;
+        if (requestedRoomId === roomId) return;
+
+        requestedRoomId = roomId;
+        joinPromise = ms.joinRoom(roomId);
+        void joinPromise.catch(() => undefined);
     })
 
     onDestroy(() => {
-        if (ms.roomId !== null) {
-            ms.leaveRoom();
-        }
+        void ms.leaveRoom().catch(() => undefined);
     })
 
 </script>
