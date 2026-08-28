@@ -97,7 +97,20 @@ export class Multisweeper {
                 }
                 break;
             case 'room.state':
+                this.#assert(this.state.type !== 'connecting', 'received room state while connecting');
+                this.state = {
+                    type: "lobby",
+                    playerId: this.state.playerId,
+                    roomId: message.code,
+                    players: message.players
+                }
                 break;
+            case 'room.removed':
+                this.#assert(this.state.type === 'lobby', 'received room kick outside of room');
+                this.state = {
+                    type: 'ready',
+                    playerId: this.state.playerId
+                }
         }
     }
 
@@ -142,6 +155,7 @@ export class Multisweeper {
     }
 
     quit = async () => {
+        await this.leaveRoom();
         this.#ws.close();
         this.#logger.warn("terminating player instance")
     }
@@ -150,6 +164,10 @@ export class Multisweeper {
         return await this.#sendGameMessage({
             type: "room.leave"
         });
+    }
+
+    createRoom = async () => {
+        this.#assert(this.roomId === null);
     }
 
     public get isReady() : boolean {
