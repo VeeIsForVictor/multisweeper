@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from "$app/paths";
 	import type { State } from "$lib/multisweeper/state";
+	import { onDestroy } from "svelte";
     import type { PageProps } from "./$types";
 
     const { data, params }: PageProps = $props();
@@ -11,6 +12,12 @@
     $effect(() => {
         if (ms.state.type !== 'connecting') {
             joinPromise = ms.joinRoom(params.roomId);
+        }
+    })
+
+    onDestroy(() => {
+        if (ms.roomId !== null) {
+            ms.leaveRoom();
         }
     })
 

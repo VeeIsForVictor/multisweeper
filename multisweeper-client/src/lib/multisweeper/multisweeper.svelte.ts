@@ -142,10 +142,24 @@ export class Multisweeper {
     }
 
     quit = async () => {
-        await this.#sendGameMessage({
-            type: "room.leave"
-        });
         this.#ws.close();
         this.#logger.warn("terminating player instance")
     }
+
+    leaveRoom = async () => {
+        return await this.#sendGameMessage({
+            type: "room.leave"
+        });
+    }
+
+    public get isReady() : boolean {
+        return this.state.type === 'connecting';
+    }
+
+    public get roomId() : string | null {
+        return this.state.type === 'lobby'
+            ? this.state.roomId
+            : null
+    }
+    
 }
