@@ -95,6 +95,9 @@ export class Multisweeper {
                     playerId: this.state.playerId,
                     lobbies: message.rooms
                 }
+                break;
+            case 'room.state':
+                break;
         }
     }
 
@@ -130,11 +133,11 @@ export class Multisweeper {
 
         this.#assert(response.type === 'room.state' || response.type === 'command.rejected');
 
-        return new Promise<void>((resolve, reject) => {
+        return new Promise<State>((resolve, reject) => {
             if (response.type === 'room.state')
-                return resolve();
+                return resolve(this.state);
             else 
-                return reject(response.message_id);
+                return reject(response.error);
         })
     }
 
