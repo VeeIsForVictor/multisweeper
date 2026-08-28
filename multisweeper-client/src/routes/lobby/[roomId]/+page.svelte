@@ -2,12 +2,15 @@
 	import { resolve } from "$app/paths";
 	import { onDestroy } from "svelte";
 	import type { PageProps } from "./$types";
+	import Game from "$lib/components/Game.svelte";
 
 	const { data, params }: PageProps = $props();
 	const { ms } = $derived(data);
 
 	let requestedRoomId: string | undefined;
 	let joinError: Error | null = $state(null);
+
+    let gameState = $derived(ms.state);
 
 	$effect(() => {
 		const roomId = params.roomId;
@@ -35,8 +38,9 @@
 {:else if joinError}
     <h1 class="text-red-600">{joinError.message}</h1>
     <a href={resolve('/')}>Return to Room List?</a>
-{:else if ms.state.type === 'lobby' && ms.state.roomId === params.roomId}
-    <h1>Lobby: {ms.state.roomId}</h1>
+{:else if gameState.type === 'lobby' && gameState.roomId === params.roomId}
+    <h1>Lobby: {gameState.roomId}</h1>
+    <Game {gameState} />
 {:else}
     <h1>Joining lobby...</h1>
 {/if}
