@@ -174,6 +174,9 @@ export class Multisweeper {
         }
         return this.#sendGameMessage({
             type: 'room.create'
+        }).then((message) => {
+            this.#assert(message.type === 'room.state');
+            return message.code;
         })
     }
 

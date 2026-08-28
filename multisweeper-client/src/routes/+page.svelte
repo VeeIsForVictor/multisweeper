@@ -2,6 +2,7 @@
 	import { resolve } from "$app/paths";
 	import { onMount } from "svelte";
     import { type PageProps } from "./$types";
+	import { goto } from "$app/navigation";
     export const { data }: PageProps = $props();
     
     const { ms } = $derived(data);
@@ -14,6 +15,12 @@
 
         return () => clearInterval(querySchedule);
     });
+
+    async function handleCreateRoom() {
+        await ms.createRoom().then(
+            (roomId) => goto(resolve('/lobby/[roomId]', { roomId }))
+        );
+    }
     
 </script>
 
@@ -25,7 +32,7 @@
     {:else if state.type === 'ready'}
         <h1>Querying server for lobbies...</h1>
     {:else if state.type === 'landed'}
-            <button>Host Game</button>
+            <button onclick={handleCreateRoom}>Host Game</button>
             or
             <h3>Join an Existing Room</h3>
             <div class="grid grid-rows-3">
