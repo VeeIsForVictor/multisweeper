@@ -10,6 +10,10 @@
     let joinPromise: Promise<State> | null = $state(null);
 
     $effect(() => {
+        if (ms.state.type === 'lobby' && ms.state.roomId === params.roomId) {
+            joinPromise = new Promise((resolve) => resolve(ms.state));
+            return ;
+        }
         if (ms.state.type !== 'connecting') {
             joinPromise = ms.joinRoom(params.roomId);
         }
@@ -27,7 +31,7 @@
     {#await joinPromise}
         <h1>Connecting...</h1>
     {:then state} 
-        {@const room = state?.type === 'lobby' ? state.roomId : ''}
+        {@const room = state?.type === 'lobby' ? state.roomId : ms.roomId}
         <h1>Lobby: {room}</h1>
     {:catch error}
         <h1 class="text-red-600">{error.message}</h1>
