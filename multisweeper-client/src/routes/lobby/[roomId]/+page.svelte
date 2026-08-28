@@ -1,38 +1,42 @@
 <script lang="ts">
 	import { resolve } from "$app/paths";
-	import type { State } from "$lib/multisweeper/state";
 	import { onDestroy } from "svelte";
-    import type { PageProps } from "./$types";
+	import type { PageProps } from "./$types";
 
-    const { data, params }: PageProps = $props();
-    const { ms } = $derived(data);
+	const { data, params }: PageProps = $props();
+	const { ms } = $derived(data);
 
-    let joinPromise: Promise<State> | null = $state(null);
-    let requestedRoomId: string | null = $state(null);
+	let requestedRoomId: string | undefined;
+	let joinError: Error | null = $state(null);
 
-    $effect(() => {
-        const roomId = params.roomId;
-        if (requestedRoomId === roomId) return;
+	$effect(() => {
+		const roomId = params.roomId;
+		if (requestedRoomId === roomId) return;
 
-        requestedRoomId = roomId;
-        joinPromise = ms.joinRoom(roomId);
-        void joinPromise.catch(() => undefined);
-    })
+		requestedRoomId = roomId;
+		joinError = null;
+		void ms.joinRoom(roomId).catch((error) => {
+			if (requestedRoomId !== roomId) return;
+			joinError = error instanceof Error ? error : new Error(String(error));
+		});
+	});
 
-    onDestroy(() => {
-        void ms.leaveRoom().catch(() => undefined);
-    })
+	onDestroy(() => {
+		void ms.leaveRoom().catch(() => undefined);
+	});
 
 </script>
 
-{#if ms.state.type !== 'connecting'}
-    {#await joinPromise}
-        <h1>Connecting...</h1>
-    {:then state} 
-        {@const room = state?.type === 'lobby' ? state.roomId : ms.roomId}
-        <h1>Lobby: {room}</h1>
-    {:catch error}
-        <h1 class="text-red-600">{error.message}</h1>
-        <a href={resolve('/')}>Return to Room List?</a>
-    {/await}
+{#if ms.state.type === 'connecting'}
+    <h1>Connecting...</h1>
+{:else if ms.state.type === 'fatal'}
+    <h1 class="text-red-600">{ms.state.message}</h1>
+    <a href={resolve('/')}>Return to Room List?</a>
+{:else if joinError}
+    <h1 class="text-red-600">{joinError.message}</h1>
+    <a href={resolve('/')}>Return to Room List?</a>
+{:else if ms.state.type === 'lobby' && ms.state.roomId === params.roomId}
+    <h1>Lobby: {ms.state.roomId}</h1>
+{:else}
+    <h1>Joining lobby...</h1>
 {/if}

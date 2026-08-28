@@ -326,9 +326,4 @@ export class Multisweeper {
         }
     }
 
-    public get roomId(): RoomCode {
-        const state = this.#state;
-        this.#assert(state.type === 'lobby', 'roomId is only available while in a room');
-        return state.roomId;
-    }
 }
