@@ -4,6 +4,7 @@
 	import type { LayoutProps } from './$types';
 	import { onDestroy } from 'svelte';
 	import { browser } from '$app/environment';
+	import Background from '$lib/components/Background.svelte';
 
 	let { children, data }: LayoutProps = $props();
 	const { ms } = $derived(data);
@@ -14,6 +15,8 @@
 </script>
 
 <svelte:head><link rel="icon" href={favicon} /></svelte:head>
+
+<Background />
 <div class="flex flex-col items-center justify-center h-screen w-full">
 	{@render children()}
 </div>
