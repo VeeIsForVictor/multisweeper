@@ -17,6 +17,9 @@
 <svelte:head><link rel="icon" href={favicon} /></svelte:head>
 
 <Background />
-<div class="flex flex-col items-center justify-center h-screen w-full">
-	{@render children()}
+
+<div class="w-lg mx-auto bg-white">
+	<div class="flex flex-col items-center justify-center h-screen w-full">
+		{@render children()}
+	</div>
 </div>
