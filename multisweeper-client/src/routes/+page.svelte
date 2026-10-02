@@ -41,7 +41,7 @@
     {:else if state.type === 'landed'}
             <button 
                 onclick={handleCreateRoom} 
-                class="text-lg border-2 py-2 px-4 text-blue-500 stroke-blue-500"
+                class="text-lg border-2 py-2 px-4 text-blue-500 stroke-blue-500 animate-pulse hover:cursor-pointer"
             >Host Game</button>
             {#if state.lobbies.length > 0}
                 or
@@ -49,7 +49,7 @@
                 <div class="grid grid-rows-3">
                     {#each state.lobbies as lobby (lobby)}
                         <div 
-                            class="flex flex-col text-sm border-2 py-1 px-2 text-green-500 stroke-green-500"
+                            class="flex flex-col text-sm border-2 py-1 px-2 text-green-500 stroke-green-500 animate-pulse hover:cursor-pointer"
                         >
                             <a 
                                 href={resolve("/lobby/[roomId]", { roomId: lobby })} 
