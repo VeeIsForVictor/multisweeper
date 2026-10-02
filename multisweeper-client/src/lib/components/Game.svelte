@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { LobbyState } from '$lib/multisweeper/state';
-	import type { CellView, ClientDifficulty } from '$lib/protocol';
+	import { PlayerId, type CellView, type ClientDifficulty } from '$lib/protocol';
 
 	interface Props {
 		lobby: LobbyState;
@@ -82,15 +82,18 @@
 <section class="flex w-full max-w-4xl flex-col gap-6 p-6" aria-label="Multisweeper game">
 	<header class="flex flex-wrap items-center justify-between gap-3">
 		<div>
-			<h2 class="text-2xl">Room {lobby.roomId}</h2>
-			<p>{lobby.players.length} player{lobby.players.length === 1 ? '' : 's'}</p>
+			<h2 class="text-2xl">Room <span class="text-blue-700 hover:animate-pulse">{lobby.roomId}</span></h2>
+			<button onclick={leaveLobby} class="text-red-600 hover:underline hover:cursor-pointer" disabled={pendingAction !== null}>Leave room</button>
 		</div>
-		<button onclick={leaveLobby} disabled={pendingAction !== null}>Leave room</button>
 	</header>
 
+	
 	<div class="flex flex-wrap gap-2" aria-label="Players">
-		{#each lobby.players as player (player.id)}
-			<span class="rounded border px-2 py-1">
+		<span class="rounded border px-2 py-1 text-sm text-green-400">
+			{lobby.owner === lobby.playerId ? 'You': lobby.owner}: Host
+		</span>
+		{#each lobby.players.filter(({ id }) => id != lobby.owner) as player (player.id)}
+			<span class="rounded border px-2 py-1 text-sm">
 				{player.id === lobby.playerId ? 'You' : player.id}: {player.state}
 			</span>
 		{/each}
@@ -98,7 +101,7 @@
 
 	{#if matchState === 'Waiting'}
 		<div class="flex flex-wrap items-end gap-3">
-			<p>
+			<p class="animate-pulse">
 				{lobby.owner === lobby.playerId
 					? 'Choose a difficulty and start the game.'
 					: 'Waiting for the host to start the game.'}
