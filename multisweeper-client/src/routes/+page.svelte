@@ -31,7 +31,7 @@
     
 </script>
 
-<h1>Welcome to Multisweeper!</h1>
+<h1 class="text-xl underline">Welcome to Multisweeper!</h1>
 
 <div class="flex flex-col m-8 items-center gap-2">
     {#if state.type === 'connecting'}
@@ -39,23 +39,28 @@
     {:else if state.type === 'ready'}
         <h1>Querying server for lobbies...</h1>
     {:else if state.type === 'landed'}
-            <button onclick={handleCreateRoom}>Host Game</button>
-            or
-            <h3>Join an Existing Room</h3>
-            <div class="grid grid-rows-3">
-                {#each state.lobbies as lobby (lobby)}
-                    <div class="flex flex-col">
-                        <a 
-                            href={resolve("/lobby/[roomId]", { roomId: lobby })} 
-                            title="join room {lobby}"
+            <button 
+                onclick={handleCreateRoom} 
+                class="text-lg border-2 py-2 px-4 text-blue-500 stroke-blue-500"
+            >Host Game</button>
+            {#if state.lobbies.length > 0}
+                or
+                <h3 class="text-lg text-green-400">Join an Existing Room</h3>
+                <div class="grid grid-rows-3">
+                    {#each state.lobbies as lobby (lobby)}
+                        <div 
+                            class="flex flex-col text-sm border-2 py-1 px-2 text-green-500 stroke-green-500"
                         >
-                            {lobby}
-                        </a>
-                    </div>
-                {:else}
-                    <h4>No lobbies available. Why not make your own?</h4>
-                {/each}
-            </div>
+                            <a 
+                                href={resolve("/lobby/[roomId]", { roomId: lobby })} 
+                                title="join room {lobby}"
+                            >
+                                {lobby}
+                            </a>
+                        </div>
+                    {/each}
+                </div>
+            {/if}
     {:else}
         <h1 class="text-red-500">This shouldn't be appearing, oops!</h1>
     {/if}
