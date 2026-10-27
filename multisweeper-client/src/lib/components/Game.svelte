@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type { LobbyState } from '$lib/multisweeper/state';
-	import { PlayerId, type CellView, type ClientDifficulty } from '$lib/protocol';
+	import { type CellView, type ClientDifficulty } from '$lib/protocol';
+	import BinocularsIcon from 'virtual:iconify/mdi/binoculars?mode=svg';
+	import StarIcon from 'virtual:iconify/mdi/star?mode=svg';
 
 	interface Props {
 		lobby: LobbyState;
@@ -89,12 +91,12 @@
 
 	
 	<div class="flex flex-wrap gap-2" aria-label="Players">
-		<span class="rounded border px-2 py-1 text-sm text-green-400">
-			{lobby.owner === lobby.playerId ? 'You': lobby.owner}: Host
+		<span class="rounded border px-2 py-1 text-sm text-green-400 flex flex-row items-center gap-1">
+			{lobby.owner === lobby.playerId ? 'You': lobby.owner} <StarIcon height="1.5em" />
 		</span>
 		{#each lobby.players.filter(({ id }) => id != lobby.owner) as player (player.id)}
-			<span class="rounded border px-2 py-1 text-sm">
-				{player.id === lobby.playerId ? 'You' : player.id}: {player.state}
+			<span class="rounded border px-2 py-1 text-sm flex flex-row items-center gap-1">
+				{player.id === lobby.playerId ? 'You' : player.id} <BinocularsIcon height="1.5em" />
 			</span>
 		{/each}
 	</div>
