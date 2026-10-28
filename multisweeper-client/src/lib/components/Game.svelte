@@ -82,7 +82,7 @@
 </script>
 
 <section class="flex w-full max-w-4xl flex-col gap-6 p-6" aria-label="Multisweeper game">
-	<header class="flex flex-wrap items-center justify-between gap-3">
+	<header class="flex flex-wrap self-center items-center justify-between gap-3">
 		<div>
 			<h2 class="text-2xl">Room <span class="text-blue-700 hover:animate-pulse">{lobby.roomId}</span></h2>
 			<button onclick={leaveLobby} class="text-red-600 hover:underline hover:cursor-pointer" disabled={pendingAction !== null}>Leave room</button>
@@ -102,14 +102,14 @@
 	</div>
 
 	{#if matchState === 'Waiting'}
-		<div class="flex flex-wrap items-end gap-3">
+		<div class="w-full flex flex-wrap items-end gap-3">
 			<p class="animate-pulse">
 				{lobby.owner === lobby.playerId
 					? 'Choose a difficulty and start the game.'
 					: 'Waiting for the host to start the game.'}
 			</p>
 			{#if lobby.owner === lobby.playerId}
-				<label class="flex flex-col gap-1">
+				<label class="w-full flex flex-col items-start gap-1">
 					Difficulty
 					<select bind:value={difficulty} disabled={pendingAction !== null}>
 						<option value="Test">Test</option>
@@ -118,7 +118,9 @@
 						<option value="Hard">Hard</option>
 					</select>
 				</label>
-				<button onclick={startGame} disabled={pendingAction !== null}>Start game</button>
+				<div class="w-full flex flex-col items-center">
+					<button class="cursor-pointer border px-2 py-1 rounded text-yellow-400 not-hover:animate-pulse" onclick={startGame} disabled={pendingAction !== null}>Start game</button>
+				</div>
 			{/if}
 		</div>
 	{:else if game}
