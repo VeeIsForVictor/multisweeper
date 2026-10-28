@@ -30,25 +30,27 @@
 	});
 </script>
 
-{#if ms.state.type === 'connecting'}
-	<h1>Connecting...</h1>
-{:else if ms.state.type === 'fatal'}
-	<h1 class="text-red-600">{ms.state.message}</h1>
-	<a href={resolve('/')}>Return to Room List?</a>
-{:else if joinError}
-	<h1 class="text-red-600">{joinError.message}</h1>
-	<a href={resolve('/')}>Return to Room List?</a>
-{:else if gameState.type === 'lobby' && gameState.roomId === params.roomId}
-	<Game
-		lobby={gameState}
-		start={(difficulty) => ms.startGame(difficulty)}
-		reveal={(x, y) => ms.reveal(x, y)}
-		flag={(x, y) => ms.flag(x, y)}
-		quit={async () => {
-			await ms.leaveRoom();
-			await goto(resolve('/'));
-		}}
-	/>
-{:else}
-	<h1>Joining lobby...</h1>
-{/if}
+<div class="w-full flex flex-col items-center text-center">
+	{#if ms.state.type === 'connecting'}
+		<h1>Connecting...</h1>
+	{:else if ms.state.type === 'fatal'}
+		<h1 class="text-red-600 mb-4">{ms.state.message}</h1>
+		<a href={resolve('/')}>Return to Room List?</a>
+	{:else if joinError}
+		<h1 class="text-red-600 mb-4">{joinError.message}</h1>
+		<a href={resolve('/')}>Return to Room List?</a>
+	{:else if gameState.type === 'lobby' && gameState.roomId === params.roomId}
+		<Game
+			lobby={gameState}
+			start={(difficulty) => ms.startGame(difficulty)}
+			reveal={(x, y) => ms.reveal(x, y)}
+			flag={(x, y) => ms.flag(x, y)}
+			quit={async () => {
+				await ms.leaveRoom();
+				await goto(resolve('/'));
+			}}
+		/>
+	{:else}
+		<h1>Joining lobby...</h1>
+	{/if}
+</div>
