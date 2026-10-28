@@ -27,13 +27,14 @@ export type IdentifiedState = Exclude<State, ConnectingState | FatalState>;
 export function reduceState(state: State, message: ServerMessage): State {
     switch (message.type) {
         case 'connection.ready':
-            if (state.type !== 'connecting') {
-                throw new Error('received connection.ready after successful connection');
-            }
+            if (state.type !== 'connecting') return state;
             return {
                 type: 'ready',
                 playerId: message.player_id
             };
+
+        case 'connection.resumed':
+            return state;
 
         case 'rooms.listed':
             if (state.type === 'connecting' || state.type === 'fatal') {

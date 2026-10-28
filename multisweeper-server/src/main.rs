@@ -13,7 +13,7 @@ use tracing_subscriber::EnvFilter;
 use multisweeper_server::{
     protocol::registry::RegistryMessage,
     registry::{Registry, RegistryAddr},
-    session::{PlayerId, Session},
+    session::Session,
 };
 
 #[derive(Parser, Debug)]
@@ -77,18 +77,18 @@ fn init_tracing() {
 #[tracing::instrument(name = "connection.handshake", skip_all)]
 async fn accept_connection(stream: TcpStream, registry: RegistryAddr) -> Result<()> {
     let ws_stream = accept_async(stream).await?;
-    let (reply_sdr, reply_rcr) = oneshot::channel::<PlayerId>();
+    let (reply_sdr, reply_rcr) = oneshot::channel();
     registry
         .send(RegistryMessage::CreatePlayer(reply_sdr))
         .await?;
-    let id = reply_rcr.await?;
+    let registration = reply_rcr.await?;
 
     info!(
         target: "multisweeper.session.created",
-        player_id = %id,
+        player_id = %registration.id,
         "session created"
     );
-    let session = Session::new(id, ws_stream, registry);
+    let session = Session::new(registration, ws_stream, registry);
     tokio::spawn(session.handle_connections());
     Ok(())
 }

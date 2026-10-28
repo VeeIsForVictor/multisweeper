@@ -4,10 +4,25 @@ use crate::protocol::session::MessageId;
 use crate::session::{PlayerAddr, PlayerId};
 
 pub enum PlayerCommand {
-    Join,
+    Join {
+        resume_token: String,
+        generation: u64,
+    },
+    Reattach {
+        resume_token: String,
+        generation: u64,
+    },
+    Detach {
+        resume_token: String,
+        generation: u64,
+    },
     Leave,
-    StartGame { difficulty: GameDifficulty },
-    GameAction { action: GameAction },
+    StartGame {
+        difficulty: GameDifficulty,
+    },
+    GameAction {
+        action: GameAction,
+    },
     GameQuery,
 }
 
@@ -19,6 +34,7 @@ pub struct RequestContext {
 
 pub struct RoomMessage {
     pub id: PlayerId,
+    pub generation: u64,
     pub request: RequestContext,
     pub command: PlayerCommand,
 }

@@ -7,6 +7,12 @@ export const ConnectionPing = v.object({
 });
 export type ConnectionPing = v.InferOutput<typeof ConnectionPing>;
 
+export const ConnectionResume = v.object({
+	type: v.literal('connection.resume'),
+	resume_token: v.string()
+});
+export type ConnectionResume = v.InferOutput<typeof ConnectionResume>;
+
 export const RoomsList = v.object({
 	type: v.literal('rooms.list'),
 });
@@ -49,6 +55,7 @@ export type RoomStateGet = v.InferOutput<typeof RoomStateGet>;
 
 export const ClientCommand = v.variant('type', [
 	ConnectionPing,
+	ConnectionResume,
 	RoomsList,
 	RoomJoin,
 	RoomCreate,

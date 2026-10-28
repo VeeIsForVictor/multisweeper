@@ -12,9 +12,18 @@ import {
 export const ConnectionReady = v.object({
 	type: v.literal('connection.ready'),
 	message_id: MessageId,
-	player_id: PlayerId
+	player_id: PlayerId,
+	resume_token: v.string()
 });
 export type ConnectionReady = v.InferOutput<typeof ConnectionReady>;
+
+export const ConnectionResumed = v.object({
+	type: v.literal('connection.resumed'),
+	message_id: MessageId,
+	correlation_id: MessageId,
+	player_id: PlayerId
+});
+export type ConnectionResumed = v.InferOutput<typeof ConnectionResumed>;
 
 export const ConnectionPong = v.object({
 	type: v.literal('connection.pong'),
@@ -67,6 +76,7 @@ export type GameStarted = v.InferOutput<typeof GameStarted>;
 
 export const ServerMessage = v.variant('type', [
 	ConnectionReady,
+	ConnectionResumed,
 	ConnectionPong,
 	RoomsListed,
 	RoomState,

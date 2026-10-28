@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    time::{Duration, Instant},
+};
 
 use anyhow::Result;
 use multisweeper_core::{Game, GameActionResult, GameDifficulty, GameError, GameSnapshot};
@@ -21,6 +24,8 @@ use crate::{
 pub type RoomCode = String;
 pub type RoomMailbox = Receiver<RoomMessage>;
 pub type RoomAddr = Sender<RoomMessage>;
+
+const DISCONNECT_GRACE: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, Error)]
 pub enum RoomError {
@@ -70,7 +75,10 @@ impl RoomError {
 }
 
 struct PlayerRecord {
-    address: PlayerAddr,
+    address: Option<PlayerAddr>,
+    resume_token: String,
+    generation: u64,
+    detached_at: Option<Instant>,
     state: PlayerState,
 }
 
@@ -204,14 +212,23 @@ impl Room {
         })
     }
 
-    fn register_player(&mut self, id: PlayerId, addr: PlayerAddr) {
+    fn register_player(
+        &mut self,
+        id: PlayerId,
+        resume_token: String,
+        generation: u64,
+        addr: PlayerAddr,
+    ) {
         if self.owner.is_none() {
             self.owner = Some(id.clone());
         }
         self.players.insert(
             id.clone(),
             PlayerRecord {
-                address: addr,
+                address: Some(addr),
+                resume_token,
+                generation,
+                detached_at: None,
                 state: PlayerState::Spectator,
             },
         );
@@ -350,9 +367,14 @@ impl Room {
     }
 
     async fn event_loop(&mut self) -> Result<()> {
+        let mut cleanup = tokio::time::interval(Duration::from_secs(1));
         loop {
             let event = tokio::select! {
-                msg = self.mailbox.recv() => RoomEvent::Session(msg)
+                msg = self.mailbox.recv() => RoomEvent::Session(msg),
+                _ = cleanup.tick() => {
+                    self.reap_detached_players().await;
+                    continue;
+                }
             };
 
             match event {
@@ -380,6 +402,25 @@ impl Room {
         }
     }
 
+    async fn reap_detached_players(&mut self) {
+        let expired = self
+            .players
+            .iter()
+            .filter_map(|(id, player)| {
+                player
+                    .detached_at
+                    .filter(|detached_at| detached_at.elapsed() >= DISCONNECT_GRACE)
+                    .map(|_| id.clone())
+            })
+            .collect::<Vec<_>>();
+        for id in &expired {
+            let _ = self.drop_player(&id).await;
+        }
+        if !expired.is_empty() {
+            let _ = self.broadcast_state(None).await;
+        }
+    }
+
     fn receive_mailbox(&self, msg: Option<RoomMessage>) -> Result<RoomMessage> {
         match msg {
             Some(msg) => Ok(msg),
@@ -389,12 +430,12 @@ impl Room {
 
     async fn resolve_mailbox_errs(&mut self, mut errs: Vec<RoomError>) -> Vec<RoomError> {
         if !errs.is_empty() {
-            let mut to_drop = Vec::new();
+            let mut to_detach = Vec::new();
             let remainder = errs
                 .iter()
                 .filter(|err| {
                     if let RoomError::PlayerDropped(id) = err {
-                        to_drop.push(id);
+                        to_detach.push(id.clone());
                         false
                     } else {
                         true
@@ -402,16 +443,8 @@ impl Room {
                 })
                 .cloned()
                 .collect::<Vec<RoomError>>();
-            for id in to_drop {
-                let addr = match self.drop_player(id).await {
-                    Ok(addr) => addr,
-                    Err(_) => continue,
-                };
-                let _ = addr
-                    .send(SessionMessage::Broadcast(SessionEvent::RoomRemoved {
-                        reason: "player dropped".to_string(),
-                    }))
-                    .await;
+            for id in to_detach {
+                self.detach_player(&id);
             }
             let _ = self.broadcast_state(None).await;
             errs = remainder;
@@ -423,6 +456,7 @@ impl Room {
         let player_id = msg.id.clone();
         let request = msg.request;
         let reply_to = request.reply_to.clone();
+        let generation = msg.generation;
         debug!(
             target: "multisweeper.room.command_received",
             room_code = %self.code,
@@ -430,12 +464,45 @@ impl Room {
             command = player_command_name(&msg.command),
             "room command received"
         );
+        let is_attachment_command = matches!(
+            &msg.command,
+            PlayerCommand::Join { .. }
+                | PlayerCommand::Reattach { .. }
+                | PlayerCommand::Detach { .. }
+        );
+        if !is_attachment_command
+            && self
+                .players
+                .get(&player_id)
+                .is_some_and(|player| player.generation != generation)
+        {
+            let _ = reply_to
+                .send(SessionMessage::Reply {
+                    request_id: request.message_id.clone(),
+                    message: SessionEvent::Error {
+                        error: ClientError::new(
+                            ErrorCode::RoomUnavailable,
+                            "connection has been superseded",
+                        ),
+                    },
+                })
+                .await;
+            return Ok(());
+        }
         let mut errs = Vec::new();
         let mut correlated_state_for = None;
         match msg.command {
-            PlayerCommand::Join => {
+            PlayerCommand::Join {
+                resume_token,
+                generation,
+            } => {
                 if matches!(self.match_state, RoomMatchState::Waiting) {
-                    self.register_player(player_id.clone(), reply_to.clone());
+                    self.register_player(
+                        player_id.clone(),
+                        resume_token,
+                        generation,
+                        reply_to.clone(),
+                    );
                     correlated_state_for = Some((player_id.clone(), request.clone()));
                 } else {
                     let _ = reply_to
@@ -450,6 +517,45 @@ impl Room {
                         })
                         .await;
                 }
+            }
+            PlayerCommand::Reattach {
+                resume_token,
+                generation,
+            } => match self.players.get_mut(&player_id) {
+                Some(player)
+                    if player.resume_token == resume_token && generation > player.generation =>
+                {
+                    player.address = Some(reply_to.clone());
+                    player.generation = generation;
+                    player.detached_at = None;
+                    correlated_state_for = Some((player_id.clone(), request.clone()));
+                }
+                _ => {
+                    let _ = reply_to
+                        .send(SessionMessage::Reply {
+                            request_id: request.message_id.clone(),
+                            message: SessionEvent::RoomJoinRejected {
+                                error: ClientError::new(
+                                    ErrorCode::RoomUnavailable,
+                                    "player session is no longer available",
+                                ),
+                            },
+                        })
+                        .await;
+                }
+            },
+            PlayerCommand::Detach {
+                resume_token,
+                generation,
+            } => {
+                if let Some(player) = self.players.get_mut(&player_id)
+                    && player.resume_token == resume_token
+                    && player.generation == generation
+                {
+                    player.address = None;
+                    player.detached_at = Some(Instant::now());
+                }
+                return Ok(());
             }
             PlayerCommand::Leave => {
                 let addr = match self.drop_player(&player_id).await {
@@ -619,7 +725,17 @@ impl Room {
             }
         }
 
-        Ok(record.address)
+        Ok(record.address.unwrap_or_else(|| {
+            let (sender, _receiver) = mpsc::channel(1);
+            sender
+        }))
+    }
+
+    fn detach_player(&mut self, id: &PlayerId) {
+        if let Some(player) = self.players.get_mut(id) {
+            player.address = None;
+            player.detached_at = Some(Instant::now());
+        }
     }
 
     #[tracing::instrument(
@@ -687,12 +803,14 @@ impl Room {
         fields(room_code = %self.code, player_id = %id)
     )]
     async fn send_player(&mut self, id: &PlayerId, msg: SessionMessage) -> Result<(), RoomError> {
-        let addr = match self.players.get_mut(id) {
-            Some(addr) => addr,
-            None => return Err(RoomError::NoPlayerFound(id.clone())),
+        let Some(player) = self.players.get(id) else {
+            return Err(RoomError::NoPlayerFound(id.clone()));
+        };
+        let Some(addr) = player.address.clone() else {
+            return Ok(());
         };
 
-        match addr.address.send(msg).await {
+        match addr.send(msg).await {
             Ok(()) => Ok(()),
             Err(_error) => {
                 warn!(
@@ -731,7 +849,9 @@ impl Room {
 
 fn player_command_name(command: &PlayerCommand) -> &'static str {
     match command {
-        PlayerCommand::Join => "join",
+        PlayerCommand::Join { .. } => "join",
+        PlayerCommand::Reattach { .. } => "reattach",
+        PlayerCommand::Detach { .. } => "detach",
         PlayerCommand::Leave => "leave",
         PlayerCommand::StartGame { .. } => "start_game",
         PlayerCommand::GameAction { .. } => "game_action",

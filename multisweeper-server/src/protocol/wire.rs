@@ -14,6 +14,11 @@ use crate::{
 pub enum ClientRequest {
     #[serde(rename = "connection.ping")]
     ConnectionPing { message_id: MessageId },
+    #[serde(rename = "connection.resume")]
+    ConnectionResume {
+        message_id: MessageId,
+        resume_token: String,
+    },
     #[serde(rename = "rooms.list")]
     RoomsList { message_id: MessageId },
     #[serde(rename = "room.join")]
@@ -90,6 +95,13 @@ pub enum ServerMessage {
     #[serde(rename = "connection.ready")]
     ConnectionReady {
         message_id: MessageId,
+        player_id: PlayerId,
+        resume_token: String,
+    },
+    #[serde(rename = "connection.resumed")]
+    ConnectionResumed {
+        message_id: MessageId,
+        correlation_id: MessageId,
         player_id: PlayerId,
     },
     #[serde(rename = "connection.pong")]
@@ -191,6 +203,7 @@ impl ClientRequest {
     pub fn message_id(&self) -> &MessageId {
         match self {
             Self::ConnectionPing { message_id }
+            | Self::ConnectionResume { message_id, .. }
             | Self::RoomsList { message_id }
             | Self::RoomCreate { message_id }
             | Self::RoomLeave { message_id }

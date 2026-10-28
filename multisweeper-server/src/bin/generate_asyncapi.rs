@@ -66,6 +66,7 @@ fn main() {
     });
     for message_name in [
         "ConnectionPong",
+        "ConnectionResumed",
         "RoomsListed",
         "RoomState",
         "RoomRemoved",

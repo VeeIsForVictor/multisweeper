@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    time::{Duration, Instant},
+};
 
 use anyhow::Result;
 use thiserror::Error;
@@ -8,8 +11,18 @@ use tracing::{debug, error, info, warn};
 
 use crate::{
     protocol::registry::RegistryMessage,
+    protocol::registry::{PlayerRegistration, ResumedPlayer},
     room::{Room, RoomAddr, RoomCode},
 };
+
+const RESUME_GRACE: Duration = Duration::from_secs(30);
+
+struct PlayerLease {
+    id: String,
+    room: Option<RoomAddr>,
+    expires_at: Option<Instant>,
+    generation: u64,
+}
 
 #[derive(Debug, Error)]
 pub enum RegistryError {
@@ -19,6 +32,8 @@ pub enum RegistryError {
     AddrDropped,
     #[error("reply failed")]
     ReplyFailed,
+    #[error("player resume token was not found or has expired")]
+    PlayerNotFound,
 }
 
 pub type RegistryMailbox = mpsc::Receiver<RegistryMessage>;
@@ -36,6 +51,7 @@ pub struct Registry {
     rooms: HashMap<String, RoomAddr>,
     room_codes_by_task: HashMap<TaskId, RoomCode>,
     room_tasks: JoinSet<Result<()>>,
+    players: HashMap<String, PlayerLease>,
     mailbox: RegistryMailbox,
     addr: RegistryAddr,
 }
@@ -49,6 +65,7 @@ impl Registry {
             rooms: HashMap::new(),
             room_codes_by_task: HashMap::new(),
             room_tasks: JoinSet::new(),
+            players: HashMap::new(),
             mailbox,
             addr,
         }
@@ -62,6 +79,31 @@ impl Registry {
 
     fn register_player(&mut self) -> String {
         self.generate_name("P")
+    }
+
+    fn register_session(&mut self) -> PlayerRegistration {
+        let id = self.register_player();
+        let resume_token = format!("{:032x}", rand::random::<u128>());
+        self.players.insert(
+            resume_token.clone(),
+            PlayerLease {
+                id: id.clone(),
+                room: None,
+                expires_at: None,
+                generation: 0,
+            },
+        );
+        PlayerRegistration {
+            id,
+            resume_token,
+            generation: 0,
+        }
+    }
+
+    fn reap_expired_players(&mut self) {
+        let now = Instant::now();
+        self.players
+            .retain(|_, player| player.expires_at.is_none_or(|expires_at| expires_at > now));
     }
 
     fn generate_lobby_code(&self) -> RoomCode {
@@ -118,6 +160,7 @@ impl Registry {
     async fn event_loop(&mut self) -> Result<()> {
         loop {
             self.reap_completed_rooms();
+            self.reap_expired_players();
             let event = tokio::select! {
                 biased;
                 task = self.room_tasks.join_next_with_id(), if !self.room_tasks.is_empty() => RegistryEvent::RoomTask(task),
@@ -230,8 +273,59 @@ impl Registry {
                 Ok(())
             }
             RegistryMessage::CreatePlayer(reply) => {
-                let id = self.register_player();
-                Self::handle_reply(reply, id).await;
+                let registration = self.register_session();
+                Self::handle_reply(reply, registration).await;
+                Ok(())
+            }
+            RegistryMessage::RegisterPlayerRoom {
+                player_id,
+                resume_token,
+                room,
+            } => {
+                if let Some(player) = self.players.get_mut(&resume_token) {
+                    if player.id == player_id {
+                        player.room = Some(room);
+                        player.expires_at = None;
+                    }
+                }
+                Ok(())
+            }
+            RegistryMessage::ClearPlayerRoom { resume_token } => {
+                if let Some(player) = self.players.get_mut(&resume_token) {
+                    player.room = None;
+                    player.expires_at = None;
+                }
+                Ok(())
+            }
+            RegistryMessage::DetachPlayer {
+                resume_token,
+                generation,
+            } => {
+                if let Some(player) = self.players.get_mut(&resume_token) {
+                    if player.generation == generation {
+                        player.expires_at = Some(Instant::now() + RESUME_GRACE);
+                    }
+                }
+                Ok(())
+            }
+            RegistryMessage::ResumePlayer {
+                resume_token,
+                reply,
+            } => {
+                self.reap_expired_players();
+                let result = match self.players.get_mut(&resume_token) {
+                    Some(player) => {
+                        player.generation = player.generation.saturating_add(1);
+                        player.expires_at = None;
+                        Ok(ResumedPlayer {
+                            id: player.id.clone(),
+                            room: player.room.clone(),
+                            generation: player.generation,
+                        })
+                    }
+                    None => Err(RegistryError::PlayerNotFound),
+                };
+                Self::handle_reply(reply, result).await;
                 Ok(())
             }
         }
@@ -248,6 +342,10 @@ fn registry_message_name(message: &RegistryMessage) -> &'static str {
         RegistryMessage::RequestLobby { .. } => "request_lobby",
         RegistryMessage::QueryLobbies(_) => "query_lobbies",
         RegistryMessage::CreatePlayer(_) => "create_player",
+        RegistryMessage::RegisterPlayerRoom { .. } => "register_player_room",
+        RegistryMessage::ClearPlayerRoom { .. } => "clear_player_room",
+        RegistryMessage::DetachPlayer { .. } => "detach_player",
+        RegistryMessage::ResumePlayer { .. } => "resume_player",
     }
 }
 
@@ -308,11 +406,15 @@ mod tests {
         room_addr
             .send(RoomMessage {
                 id: player_id.clone(),
+                generation: 0,
                 request: RequestContext {
                     message_id: "join".to_string(),
                     reply_to: player_addr.clone(),
                 },
-                command: PlayerCommand::Join,
+                command: PlayerCommand::Join {
+                    resume_token: "token".to_string(),
+                    generation: 0,
+                },
             })
             .await
             .expect("room is running");
@@ -324,6 +426,7 @@ mod tests {
         room_addr
             .send(RoomMessage {
                 id: player_id,
+                generation: 0,
                 request: RequestContext {
                     message_id: "leave".to_string(),
                     reply_to: player_addr,

@@ -5,7 +5,6 @@ import { pino } from 'pino';
 
 export const ssr = false;
 
-const server = new WebSocket(SERVER_URL);
 const logger = pino({
     transport: {
         target: 'pino-pretty',
@@ -13,7 +12,7 @@ const logger = pino({
     }
 });
 
-const ms = new Multisweeper(server, logger.child({
+const ms = new Multisweeper(SERVER_URL, logger.child({
     'target': 'game-state'
 }));
 

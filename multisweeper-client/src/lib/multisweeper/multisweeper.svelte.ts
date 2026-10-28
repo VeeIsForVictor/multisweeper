@@ -23,7 +23,8 @@ export class CommandRejectedError extends Error {
 }
 
 export class Multisweeper {
-	#ws: WebSocket;
+	#ws: WebSocket | null = null;
+	#serverUrl: string;
 	#logger: Logger;
 	// eslint-disable-next-line svelte/prefer-svelte-reactivity
 	#pendingRequests = new Map<string, PendingRequest>();
@@ -34,6 +35,8 @@ export class Multisweeper {
 	#quitRequest: Promise<void> | null = null;
 	#disposed = false;
 	#fatal = false;
+	#reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+	#reconnectDelayMs = 500;
 	#resolveReady: () => void = () => undefined;
 	#rejectReady: (reason?: unknown) => void = () => undefined;
 	#readyPromise: Promise<void>;
@@ -43,16 +46,26 @@ export class Multisweeper {
 		return this.#state;
 	}
 
-	public constructor(ws: WebSocket, logger: Logger) {
-		this.#ws = ws;
+	public constructor(serverUrl: string, logger: Logger) {
+		this.#serverUrl = serverUrl;
 		this.#logger = logger;
-		this.#readyPromise = new Promise<void>((resolve, reject) => {
-			this.#resolveReady = resolve;
-			this.#rejectReady = reject;
-		});
+		this.#readyPromise = this.#newReadyPromise();
 		void this.#readyPromise.catch(() => undefined);
+		this.#connect();
+	}
 
-		this.#ws.addEventListener('message', (event) => {
+	#newReadyPromise = (): Promise<void> => new Promise<void>((resolve, reject) => {
+		this.#resolveReady = resolve;
+		this.#rejectReady = reject;
+	});
+
+	#connect = () => {
+		if (this.#disposed || this.#fatal) return;
+
+		const ws = new WebSocket(this.#serverUrl);
+		this.#ws = ws;
+
+		ws.addEventListener('message', (event) => {
 			try {
 				const message = this.#receiveGameMessage(event.data);
 				this.#handleGameMessage(message);
@@ -61,27 +74,32 @@ export class Multisweeper {
 			}
 		});
 
-		this.#ws.addEventListener('error', () => {
-			this.#enterFatal(new Error('WebSocket error'));
+		ws.addEventListener('error', () => {
+			this.#logger.warn('WebSocket transport error; waiting for reconnect');
 		});
 
-		this.#ws.addEventListener('close', (event) => {
-			if (!this.#disposed) {
-				this.#enterFatal(new Error(`WebSocket closed (${event.code})`));
-			} else {
-				this.#rejectPending(new Error('Multisweeper session closed'));
-			}
+		ws.addEventListener('close', () => {
+			this.#rejectPending(new Error('WebSocket connection lost'));
+			if (this.#disposed || this.#fatal) return;
+			this.#readyPromise = this.#newReadyPromise();
+			void this.#readyPromise.catch(() => undefined);
+			this.#reconnectTimer = setTimeout(() => {
+				this.#reconnectTimer = null;
+				this.#connect();
+			}, this.#reconnectDelayMs);
+			this.#reconnectDelayMs = Math.min(this.#reconnectDelayMs * 2, 5_000);
 		});
-	}
+	};
 
-	#sendGameMessage = async (message: ClientCommand): Promise<ServerMessage> => {
-		await this.#readyPromise;
+	#sendGameMessage = async (message: ClientCommand, waitForReady = true): Promise<ServerMessage> => {
+		if (waitForReady) await this.#readyPromise;
 
 		if (this.#disposed) {
 			throw new Error('Multisweeper session is closed');
 		}
 
-		if (this.#ws.readyState !== WebSocket.OPEN) {
+		const ws = this.#ws;
+		if (!ws || ws.readyState !== WebSocket.OPEN) {
 			throw new Error('WebSocket is not open');
 		}
 
@@ -109,7 +127,7 @@ export class Multisweeper {
 			this.#pendingRequests.set(messageId, { resolve, reject, timeout });
 		});
 		try {
-			this.#ws.send(JSON.stringify(parsedMessage));
+			ws.send(JSON.stringify(parsedMessage));
 		} catch (e) {
 			const pending = this.#pendingRequests.get(messageId);
 			if (pending) clearTimeout(pending.timeout);
@@ -143,10 +161,33 @@ export class Multisweeper {
 			this.#logger = this.#logger.child({
 				'player.id': message.player_id
 			});
-			this.#resolveReady();
-			void this.queryRooms().catch((error) => {
-				this.#logger.warn({ error }, 'initial room query failed');
-			});
+			this.#reconnectDelayMs = 500;
+			const storedToken = window.localStorage.getItem('multisweeper.resume_token');
+			if (storedToken && storedToken !== message.resume_token) {
+				void this.#sendGameMessage({
+					type: 'connection.resume',
+					resume_token: storedToken
+				}, false).then(() => {
+					this.#resolveReady();
+					void this.queryRooms().catch((error) => {
+						this.#logger.warn({ error }, 'room query after reconnect failed');
+					});
+				}).catch((error) => {
+					window.localStorage.setItem('multisweeper.resume_token', message.resume_token);
+					this.#state = { type: 'ready', playerId: message.player_id };
+					this.#resolveReady();
+					this.#logger.warn({ error }, 'session resume failed; starting a new session');
+					void this.queryRooms().catch((queryError) => {
+						this.#logger.warn({ error: queryError }, 'room query after failed resume failed');
+					});
+				});
+			} else {
+				window.localStorage.setItem('multisweeper.resume_token', message.resume_token);
+				this.#resolveReady();
+				void this.queryRooms().catch((error) => {
+					this.#logger.warn({ error }, 'initial room query failed');
+				});
+			}
 		}
 
 		if (message.type !== 'connection.ready' && typeof message.correlation_id === 'string') {
@@ -181,7 +222,7 @@ export class Multisweeper {
 		this.#rejectPending(error);
 
 		try {
-			this.#ws.close();
+			this.#ws?.close();
 		} catch (closeError) {
 			this.#logger.warn({ error: closeError }, 'failed to close WebSocket after fatal error');
 		}
@@ -349,15 +390,16 @@ export class Multisweeper {
 		if (this.#disposed) return;
 
 		try {
-			await this.leaveRoom();
+			if (this.#ws?.readyState === WebSocket.OPEN) await this.leaveRoom();
 		} catch (error) {
 			this.#logger.warn({ error }, 'failed to leave room while terminating player instance');
 		} finally {
 			this.#disposed = true;
+			if (this.#reconnectTimer) clearTimeout(this.#reconnectTimer);
 			this.#rejectReady(new Error('Multisweeper session closed'));
 			this.#rejectPending(new Error('Multisweeper session closed'));
 			try {
-				this.#ws.close();
+				this.#ws?.close();
 			} catch (error) {
 				this.#logger.warn({ error }, 'failed to close WebSocket while terminating player instance');
 			}

@@ -16,6 +16,12 @@
         "ConnectionReady": {
           "$ref": "#/components/messages/ConnectionReady"
         },
+        "ConnectionResume": {
+          "$ref": "#/components/messages/ConnectionResume"
+        },
+        "ConnectionResumed": {
+          "$ref": "#/components/messages/ConnectionResumed"
+        },
         "GameAction": {
           "$ref": "#/components/messages/GameAction"
         },
@@ -150,6 +156,9 @@
             "player_id": {
               "type": "string"
             },
+            "resume_token": {
+              "type": "string"
+            },
             "type": {
               "const": "connection.ready",
               "type": "string"
@@ -158,11 +167,70 @@
           "required": [
             "type",
             "message_id",
-            "player_id"
+            "player_id",
+            "resume_token"
           ],
           "type": "object"
         },
         "title": "ConnectionReady"
+      },
+      "ConnectionResume": {
+        "contentType": "application/json",
+        "name": "ConnectionResume",
+        "payload": {
+          "properties": {
+            "message_id": {
+              "type": "string"
+            },
+            "resume_token": {
+              "type": "string"
+            },
+            "type": {
+              "const": "connection.resume",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "message_id",
+            "resume_token"
+          ],
+          "type": "object"
+        },
+        "title": "ConnectionResume"
+      },
+      "ConnectionResumed": {
+        "contentType": "application/json",
+        "correlationId": {
+          "description": "The message_id of the client command that caused this server message, when applicable.",
+          "location": "$message.payload#/correlation_id"
+        },
+        "name": "ConnectionResumed",
+        "payload": {
+          "properties": {
+            "correlation_id": {
+              "type": "string"
+            },
+            "message_id": {
+              "type": "string"
+            },
+            "player_id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "connection.resumed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "message_id",
+            "correlation_id",
+            "player_id"
+          ],
+          "type": "object"
+        },
+        "title": "ConnectionResumed"
       },
       "GameAction": {
         "contentType": "application/json",
@@ -716,6 +784,9 @@
           "$ref": "#/channels/multisweeper/messages/ConnectionPing"
         },
         {
+          "$ref": "#/channels/multisweeper/messages/ConnectionResume"
+        },
+        {
           "$ref": "#/channels/multisweeper/messages/RoomsList"
         },
         {
@@ -746,6 +817,9 @@
       "messages": [
         {
           "$ref": "#/channels/multisweeper/messages/ConnectionReady"
+        },
+        {
+          "$ref": "#/channels/multisweeper/messages/ConnectionResumed"
         },
         {
           "$ref": "#/channels/multisweeper/messages/ConnectionPong"

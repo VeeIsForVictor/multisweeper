@@ -21,7 +21,7 @@ use tracing::{debug, error, info};
 
 use crate::{
     protocol::{
-        registry::RegistryMessage,
+        registry::{PlayerRegistration, RegistryMessage},
         room::{PlayerCommand, RequestContext, RoomMessage},
         session::{ClientError, ErrorCode, MessageId, SessionMessage},
         wire::{ClientRequest, ServerMessage},
@@ -76,32 +76,38 @@ pub enum SessionEvent {
 
 pub struct Session {
     id: PlayerId,
+    resume_token: String,
+    generation: u64,
     mailbox: PlayerMailbox,
     addr: PlayerAddr,
     outbound: PlayerOutbound,
     inbound: PlayerInbound,
     registry_addr: RegistryAddr,
     room: Option<RoomAddr>,
+    pending_resume: Option<MessageId>,
     seen_message_ids: HashSet<MessageId>,
     message_counter: u64,
 }
 
 impl Session {
     pub fn new(
-        id: PlayerId,
+        registration: PlayerRegistration,
         stream: WebSocketStream<TcpStream>,
         registry_addr: RegistryAddr,
     ) -> Self {
         let (sender, receiver) = mpsc::channel(10);
         let (sink, source) = stream.split();
         Session {
-            id,
+            id: registration.id,
+            resume_token: registration.resume_token,
+            generation: registration.generation,
             mailbox: receiver,
             addr: sender,
             outbound: sink,
             inbound: source,
             registry_addr,
             room: None,
+            pending_resume: None,
             seen_message_ids: HashSet::new(),
             message_counter: 0,
         }
@@ -121,6 +127,7 @@ impl Session {
         self.send_outbound(ServerMessage::ConnectionReady {
             message_id,
             player_id: self.id.clone(),
+            resume_token: self.resume_token.clone(),
         })
         .await?;
         match self.event_loop().await {
@@ -243,6 +250,52 @@ impl Session {
             "client request received"
         );
         match request {
+            ClientRequest::ConnectionResume {
+                message_id,
+                resume_token,
+            } => {
+                let (reply_sdr, reply_rcr) = oneshot::channel();
+                self.registry_addr
+                    .send(RegistryMessage::ResumePlayer {
+                        resume_token: resume_token.clone(),
+                        reply: reply_sdr,
+                    })
+                    .await?;
+                let resumed = match reply_rcr.await? {
+                    Ok(player) => player,
+                    Err(error) => {
+                        return self
+                            .send_rejection(
+                                Some(message_id),
+                                ClientError::new(ErrorCode::RoomUnavailable, error.to_string()),
+                            )
+                            .await;
+                    }
+                };
+                self.id = resumed.id;
+                self.resume_token = resume_token;
+                self.generation = resumed.generation;
+                self.room = resumed.room;
+                if self.room.is_some() {
+                    self.pending_resume = Some(message_id.clone());
+                    self.send_room(
+                        message_id.clone(),
+                        PlayerCommand::Reattach {
+                            resume_token: self.resume_token.clone(),
+                            generation: self.generation,
+                        },
+                    )
+                    .await?;
+                    return Ok(());
+                }
+                let response_message_id = self.next_message_id();
+                self.send_outbound(ServerMessage::ConnectionResumed {
+                    message_id: response_message_id,
+                    correlation_id: message_id,
+                    player_id: self.id.clone(),
+                })
+                .await
+            }
             ClientRequest::ConnectionPing { message_id } => {
                 let response_message_id = self.next_message_id();
                 Ok(self
@@ -284,8 +337,14 @@ impl Session {
                     }
                 };
                 self.room = Some(addr);
-                self.send_room_or_reject(message_id, PlayerCommand::Join)
-                    .await
+                self.send_room_or_reject(
+                    message_id,
+                    PlayerCommand::Join {
+                        resume_token: self.resume_token.clone(),
+                        generation: self.generation,
+                    },
+                )
+                .await
             }
             ClientRequest::RoomJoin {
                 message_id,
@@ -327,8 +386,14 @@ impl Session {
                 match maybe_lobby_handle {
                     Ok(addr) => {
                         self.room = Some(addr);
-                        self.send_room_or_reject(message_id, PlayerCommand::Join)
-                            .await?
+                        self.send_room_or_reject(
+                            message_id,
+                            PlayerCommand::Join {
+                                resume_token: self.resume_token.clone(),
+                                generation: self.generation,
+                            },
+                        )
+                        .await?
                     }
                     Err(e) => {
                         let error = match e {
@@ -336,7 +401,9 @@ impl Session {
                                 ErrorCode::RoomNotFound,
                                 format!("requested room with code {code} not found"),
                             ),
-                            RegistryError::AddrDropped | RegistryError::ReplyFailed => {
+                            RegistryError::AddrDropped
+                            | RegistryError::ReplyFailed
+                            | RegistryError::PlayerNotFound => {
                                 SessionError::RoomDropped.client_error()
                             }
                         };
@@ -452,7 +519,57 @@ impl Session {
                 crate::protocol::session::SessionEvent::RoomRemoved { .. },
             )
         ) {
+            let _ = self
+                .registry_addr
+                .send(RegistryMessage::ClearPlayerRoom {
+                    resume_token: self.resume_token.clone(),
+                })
+                .await;
             self.room = None;
+        }
+        let resumed_room = matches!(
+            &message,
+            SessionMessage::Reply {
+                request_id,
+                message: crate::protocol::session::SessionEvent::RoomState { .. },
+                ..
+            }
+                if self.pending_resume.as_ref() == Some(request_id)
+        );
+        if resumed_room {
+            let correlation_id = self.pending_resume.take().expect("resume request exists");
+            let room_state_message_id = self.next_message_id();
+            self.send_outbound(ServerMessage::from_session(
+                room_state_message_id,
+                message.clone(),
+            ))
+            .await?;
+            let resumed_message_id = self.next_message_id();
+            self.send_outbound(ServerMessage::ConnectionResumed {
+                message_id: resumed_message_id,
+                correlation_id,
+                player_id: self.id.clone(),
+            })
+            .await?;
+            return Ok(());
+        }
+        if matches!(
+            &message,
+            SessionMessage::Reply {
+                message: crate::protocol::session::SessionEvent::RoomState { .. },
+                ..
+            }
+        ) {
+            if let Some(room) = &self.room {
+                let _ = self
+                    .registry_addr
+                    .send(RegistryMessage::RegisterPlayerRoom {
+                        player_id: self.id.clone(),
+                        resume_token: self.resume_token.clone(),
+                        room: room.clone(),
+                    })
+                    .await;
+            }
         }
         let response_message_id = self.next_message_id();
         self.send_outbound(ServerMessage::from_session(response_message_id, message))
@@ -504,6 +621,7 @@ impl Session {
             Some(addr) => Ok(addr
                 .send(RoomMessage {
                     id: self.id.clone(),
+                    generation: self.generation,
                     request: RequestContext {
                         message_id,
                         reply_to: self.addr.clone(),
@@ -533,8 +651,23 @@ impl Session {
     async fn terminate(mut self) {
         if self.room.is_some() {
             let message_id = self.next_message_id();
-            let _ = self.send_room(message_id, PlayerCommand::Leave).await;
+            let _ = self
+                .send_room(
+                    message_id,
+                    PlayerCommand::Detach {
+                        resume_token: self.resume_token.clone(),
+                        generation: self.generation,
+                    },
+                )
+                .await;
         }
+        let _ = self
+            .registry_addr
+            .send(RegistryMessage::DetachPlayer {
+                resume_token: self.resume_token,
+                generation: self.generation,
+            })
+            .await;
         let _ = self.outbound.close().await;
     }
 }
@@ -542,6 +675,7 @@ impl Session {
 fn client_request_name(request: &ClientRequest) -> &'static str {
     match request {
         ClientRequest::ConnectionPing { .. } => "connection_ping",
+        ClientRequest::ConnectionResume { .. } => "connection_resume",
         ClientRequest::RoomsList { .. } => "rooms_list",
         ClientRequest::RoomJoin { .. } => "room_join",
         ClientRequest::RoomCreate { .. } => "room_create",
@@ -554,7 +688,9 @@ fn client_request_name(request: &ClientRequest) -> &'static str {
 
 fn player_command_name(command: &PlayerCommand) -> &'static str {
     match command {
-        PlayerCommand::Join => "join",
+        PlayerCommand::Join { .. } => "join",
+        PlayerCommand::Reattach { .. } => "reattach",
+        PlayerCommand::Detach { .. } => "detach",
         PlayerCommand::Leave => "leave",
         PlayerCommand::StartGame { .. } => "start_game",
         PlayerCommand::GameAction { .. } => "game_action",
@@ -578,6 +714,7 @@ fn session_message_name(message: &SessionMessage) -> &'static str {
 fn server_message_name(response: &ServerMessage) -> &'static str {
     match response {
         ServerMessage::ConnectionReady { .. } => "connection_ready",
+        ServerMessage::ConnectionResumed { .. } => "connection_resumed",
         ServerMessage::ConnectionPong { .. } => "connection_pong",
         ServerMessage::RoomsListed { .. } => "rooms_listed",
         ServerMessage::RoomState { .. } => "room_state",
