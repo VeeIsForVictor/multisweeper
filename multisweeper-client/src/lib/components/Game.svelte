@@ -1,8 +1,8 @@
 <script lang="ts">
 	import type { LobbyState } from '$lib/multisweeper/state';
-	import { type CellView, type ClientDifficulty } from '$lib/protocol';
-	import BinocularsIcon from 'virtual:iconify/mdi/binoculars?mode=svg';
-	import StarIcon from 'virtual:iconify/mdi/star?mode=svg';
+	import { type CellView, type ClientDifficulty, type PlayerState } from '$lib/protocol';
+	import PlayerTag from './PlayerTag.svelte';
+	
 
 	interface Props {
 		lobby: LobbyState;
@@ -18,6 +18,7 @@
 	let pendingAction = $state<string | null>(null);
 	let actionError = $state<string | null>(null);
 
+	const myPlayerId = $derived(lobby.playerId);
 	const matchState = $derived(lobby.game.state);
 	const game = $derived(lobby.game.game);
 	const currentPlayerId = $derived(
@@ -30,6 +31,11 @@
 		game?.status === 'Playing' && currentPlayerId === lobby.playerId && pendingAction === null
 	);
 	const boardColumns = $derived(game?.board[0]?.length ?? 0);
+
+	function playerTagType(playerId: string, playerState: PlayerState) {
+		if (playerId === lobby.owner) return 'host' as const;
+		return playerState === 'Playing' ? 'playing' as const : 'spectator' as const;
+	}
 
 	function describeCell(cell: CellView): string {
 		if (cell === 'HiddenCell') return 'Hidden cell';
@@ -91,13 +97,13 @@
 
 	
 	<div class="flex flex-wrap gap-2" aria-label="Players">
-		<span class="rounded border px-2 py-1 text-sm text-green-400 flex flex-row items-center gap-1">
-			{lobby.owner === lobby.playerId ? 'You': lobby.owner} <StarIcon height="1.5em" />
-		</span>
-		{#each lobby.players.filter(({ id }) => id != lobby.owner) as player (player.id)}
-			<span class="rounded border px-2 py-1 text-sm flex flex-row items-center gap-1">
-				{player.id === lobby.playerId ? 'You' : player.id} <BinocularsIcon height="1.5em" />
-			</span>
+		{#each lobby.players as player (player.id)}
+			<PlayerTag
+				playerId={player.id}
+				isYou={player.id === myPlayerId}
+				type={playerTagType(player.id, player.state)}
+				class={player.id === lobby.owner ? 'text-green-400' : undefined}
+			/>
 		{/each}
 	</div>
 
@@ -142,7 +148,7 @@
 		</div>
 
 		<div
-			class="grid w-fit overflow-hidden border border-current"
+			class="self-center grid w-fit overflow-hidden border border-current"
 			style:grid-template-columns={`repeat(${boardColumns}, minmax(2rem, 1fr))`}
 			aria-label="Minefield"
 		>

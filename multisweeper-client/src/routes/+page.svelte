@@ -3,6 +3,7 @@
 	import { onMount } from "svelte";
     import { type PageProps } from "./$types";
 	import { goto } from "$app/navigation";
+	import PlayerTag from "$lib/components/PlayerTag.svelte";
     export const { data }: PageProps = $props();
     
     const { ms } = $derived(data);
@@ -39,28 +40,34 @@
     {:else if state.type === 'ready'}
         <h1>Querying server for lobbies...</h1>
     {:else if state.type === 'landed'}
-            <button 
-                onclick={handleCreateRoom} 
-                class="text-lg rounded border py-2 px-4 text-blue-500 stroke-blue-500 animate-pulse hover:cursor-pointer"
-            >Host Game</button>
-            {#if state.lobbies.length > 0}
-                or
-                <h3 class="text-lg text-green-400">Join an Existing Room</h3>
-                <div class="grid grid-rows-3">
-                    {#each state.lobbies as lobby (lobby)}
-                        <div 
-                            class="flex flex-col text-sm rounded border py-1 px-2 text-green-500 stroke-green-500 animate-pulse hover:cursor-pointer"
+        <h2 class="mb-4 flex flex-row items-center gap-2">Welcome, 
+            <PlayerTag 
+                playerId={state.playerId}
+                isYou={false}
+            />
+        </h2>
+        <button 
+            onclick={handleCreateRoom} 
+            class="text-lg rounded border py-2 px-4 text-blue-500 stroke-blue-500 animate-pulse hover:cursor-pointer"
+        >Host Game</button>
+        {#if state.lobbies.length > 0}
+            or
+            <h3 class="text-lg text-green-400">Join an Existing Room</h3>
+            <div class="grid grid-rows-3">
+                {#each state.lobbies as lobby (lobby)}
+                    <div 
+                        class="flex flex-col text-sm rounded border py-1 px-2 text-green-500 stroke-green-500 animate-pulse hover:cursor-pointer"
+                    >
+                        <a 
+                            href={resolve("/lobby/[roomId]", { roomId: lobby })} 
+                            title="join room {lobby}"
                         >
-                            <a 
-                                href={resolve("/lobby/[roomId]", { roomId: lobby })} 
-                                title="join room {lobby}"
-                            >
-                                {lobby}
-                            </a>
-                        </div>
-                    {/each}
-                </div>
-            {/if}
+                            {lobby}
+                        </a>
+                    </div>
+                {/each}
+            </div>
+        {/if}
     {:else}
         <h1 class="text-red-500">This shouldn't be appearing, oops!</h1>
     {/if}
